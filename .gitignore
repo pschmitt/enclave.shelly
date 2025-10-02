@@ -1,0 +1,32 @@
+tests/output
+__pycache__
+
+# ignore visual studio code things, and intelliJ
+.vscode
+.idea
+
+# ignore Python Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# unit test
+.tox/
+
+# ignore dev stuff
+.devcontainer
+local_play.yml
+antsibull-env
+
+# Ignore Dependency Roles that may get downloaded
+geerlingguy*
+
+# Ignore visual studio code Ansible extension things
+.ansible
+
+# Ignore locally created install files.
+*.tar.gz
