@@ -19,6 +19,11 @@ Current features include:
 A lot of the modules accept inputs which transparently modify the settings exposed via API.
 As such, if the module's own documentation is lacking, please refer to [Shelly's own API documentation](https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/Introduction).
 
+## Installing the Collection
+
+The collection can be installed using ansible-galaxy:
+`ansible-galaxy collection install git+https://github.com/skull132/enclave.shelly.git,main`
+
 ## Configuring Hosts
 
 Each device should be added as an individual host in your inventory.
@@ -76,3 +81,63 @@ Controlling the authentication parameters:
     enable: false
 ```
 
+MQTT connection setup:
+```yaml
+# Disable MQTT on the device.
+- name: Disable MQTT
+  enclave.shelly.mqtt:
+    enable: false
+
+# Configure an MQTT server connection.
+- name: Enable MQTT
+  enclave.shelly.mqtt:
+    enable: true
+    server: mqtt_server.lan:8883
+    client_id: "" # Use the shelly's own device_id
+    user: "" # no username required
+    ssl_ca: "*" # Accept any serverside SSL certificate.
+    topic_prefix: "home/v1/room/device_1"
+```
+
+WiFi connection examples:
+```yaml
+# Disable the access point.
+- name: Disable AP
+  enclave.shelly.wifi:
+    configuring: ap
+    ssid: ""
+    password: ""
+    is_open: false
+    enable: false
+
+# Set the primary WiFi connection to some network.
+- name: Primary WiFi interface connection
+  enaclave.shelly.wifi:
+    configuring: sta
+    ssid: my_home
+    password: some_secret
+    enable: true
+    ipv4mode: dhcp
+```
+
+Script management:
+```yaml
+- name: Delete script called "abc".
+  enclave.shelly.script:
+    name: abc
+    state: deleted
+
+- name: Upload test script
+    enclave.shelly.script:
+    name: test1
+    state: present
+    enable: false
+    script_path: files/test_script.js
+
+- name: Update and start test script
+    enclave.shelly.script:
+    name: test1
+    state: running
+    enable: false
+    script_path: files/test_script.js
+```
