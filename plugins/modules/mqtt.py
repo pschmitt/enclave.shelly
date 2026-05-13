@@ -128,9 +128,10 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.connection import Connection
 
 import ansible_collections.enclave.shelly.plugins.module_utils.helpers as shelly_utils
+import re
 
 def is_default_client_id(client_id: str) -> bool:
-    return client_id.startswith("shellyplus") or client_id.startswith("shellypro")
+    return re.match(r"^shelly[a-z0-9]+-[0-9a-f]+$", client_id) is not None
 
 def run_module():
     module_args = {
