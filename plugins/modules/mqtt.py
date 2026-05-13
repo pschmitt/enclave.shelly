@@ -34,6 +34,12 @@ options:
           - Set to an empty string ("") if you want to set this to null.
         required: false
         type: str
+    pass:
+        description:
+          - Password for authenticating with the MQTT broker.
+          - Set to an empty string ("") if you want to set this to null.
+        required: false
+        type: str
     ssl_ca:
         description:
           - Determines the type of TCP socket the Shelly uses for connecting to the MQTT broker.
@@ -106,6 +112,7 @@ EXAMPLES = '''
     server: mqtt_server.lan:8883
     client_id: "" # Use the shelly's own device_id
     user: "" # no username required
+    pass: "" # no password required
     ssl_ca: "*" # Accept any serverside SSL certificate.
     topic_prefix: "home/v1/room/device_1"
 '''
@@ -123,18 +130,19 @@ from ansible.module_utils.connection import Connection
 import ansible_collections.enclave.shelly.plugins.module_utils.helpers as shelly_utils
 
 def run_module():
-    module_args = dict(
-        enable=dict(type="bool", required=True),
-        server=dict(type="str", required=False),
-        client_id=dict(type="str", required=False),
-        user=dict(type="str", required=False),
-        ssl_ca=dict(type="str", required=False, choices=["none", "*", "user_ca.pem", "ca.pem"]),
-        topic_prefix=dict(type="str", required=False),
-        rpc_ntf=dict(type="bool", required=False, default=True),
-        status_ntf=dict(type="bool", required=False, default=False),
-        use_client_cert=dict(type="bool", required=False, default=False),
-        enable_control=dict(type="bool", required=False, default=True)
-    )
+    module_args = {
+        "enable": dict(type="bool", required=True),
+        "server": dict(type="str", required=False),
+        "client_id": dict(type="str", required=False),
+        "user": dict(type="str", required=False),
+        "pass": dict(type="str", required=False, no_log=True),
+        "ssl_ca": dict(type="str", required=False, choices=["none", "*", "user_ca.pem", "ca.pem"]),
+        "topic_prefix": dict(type="str", required=False),
+        "rpc_ntf": dict(type="bool", required=False, default=True),
+        "status_ntf": dict(type="bool", required=False, default=False),
+        "use_client_cert": dict(type="bool", required=False, default=False),
+        "enable_control": dict(type="bool", required=False, default=True)
+    }
 
     module = AnsibleModule(
         argument_spec=module_args,
@@ -150,7 +158,7 @@ def run_module():
     )
 
     if module.params["enable"] == True:
-        module.params = shelly_utils.optional_strs_to_none(module.params, ["server", "client_id", "user", "topic_prefix"])
+        module.params = shelly_utils.optional_strs_to_none(module.params, ["server", "client_id", "user", "pass", "topic_prefix"])
 
     if module.params["ssl_ca"] == "none":
         module.params["ssl_ca"] = None
