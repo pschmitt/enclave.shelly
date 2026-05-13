@@ -175,16 +175,37 @@ def run_module():
         }
     )
 
+    current_status = connection.send_request(
+        data={
+            "method": "MQTT.GetStatus"
+        }
+    )
+
     new_config = current_config.copy()
-    for key, current_value in current_config.items():
-        if not key in module.params:
+    for key, desired_value in module.params.items():
+        if key == "pass" and key not in current_config:
+            if desired_value is not None:
+                # The Shelly API accepts the MQTT password in SetConfig but
+                # does not return it from GetConfig. Re-send it only when the
+                # broker connection is currently down, or as part of another
+                # config update below.
+                new_config[key] = desired_value
+                if not current_status.get("connected", False):
+                    result["changed"] = True
             continue
+
+        if key not in current_config:
+            new_config[key] = desired_value
+            result["changed"] = True
+            continue
+
+        current_value = current_config[key]
 
         if key == "client_id" and default_client_id_requested and is_default_client_id(current_value):
             continue
 
-        if module.params[key] != current_value:
-            new_config[key] = module.params[key]
+        if desired_value != current_value:
+            new_config[key] = desired_value
             result["changed"] = True
 
     if module.check_mode:
