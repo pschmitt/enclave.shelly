@@ -129,6 +129,9 @@ from ansible.module_utils.connection import Connection
 
 import ansible_collections.enclave.shelly.plugins.module_utils.helpers as shelly_utils
 
+def is_default_client_id(client_id: str) -> bool:
+    return client_id.startswith("shellyplus") or client_id.startswith("shellypro")
+
 def run_module():
     module_args = {
         "enable": dict(type="bool", required=True),
@@ -157,6 +160,8 @@ def run_module():
         restart_required=False
     )
 
+    default_client_id_requested = module.params["client_id"] == ""
+
     if module.params["enable"] == True:
         module.params = shelly_utils.optional_strs_to_none(module.params, ["server", "client_id", "user", "pass", "topic_prefix"])
 
@@ -173,6 +178,9 @@ def run_module():
     new_config = current_config.copy()
     for key, current_value in current_config.items():
         if not key in module.params:
+            continue
+
+        if key == "client_id" and default_client_id_requested and is_default_client_id(current_value):
             continue
 
         if module.params[key] != current_value:
