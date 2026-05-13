@@ -135,7 +135,7 @@ def get_current_script(script_state: ScriptState, connection: Connection) -> Opt
         )
 
         code += response["data"]
-        offset += len(response["data"])
+        offset += len(response["data"].encode("utf-8"))
 
         if response["left"] == 0:
             break
