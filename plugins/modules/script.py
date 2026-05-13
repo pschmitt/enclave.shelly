@@ -149,7 +149,7 @@ def get_current_script(script_state: ScriptState, connection: Connection) -> Opt
         return code
     
 def get_new_code(path_str: str) -> str:
-    with open(path_str, "r") as file:
+    with open(path_str, "r", encoding="utf-8") as file:
         content = file.read()
 
     return content
