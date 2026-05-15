@@ -162,7 +162,7 @@ def validate_required_settings(module, params, is_gen1):
 
     required_keys = ["server"]
     if not is_gen1:
-        required_keys.extend(["client_id", "user", "ssl_ca", "topic_prefix"])
+        required_keys.append("topic_prefix")
 
     missing_keys = [key for key in required_keys if params.get(key) is None]
     if missing_keys:
