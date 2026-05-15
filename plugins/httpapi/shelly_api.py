@@ -245,6 +245,9 @@ class HttpApi(HttpApiBase):
             config = data.get("params", {}).get("config", {})
             query = {}
 
+            if "name" in config:
+                query["name"] = config["name"]
+
             if "in_mode" in config:
                 btn_type = {
                     "follow": "toggle",

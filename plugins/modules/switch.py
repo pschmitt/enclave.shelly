@@ -7,8 +7,8 @@ short_description: Configure switch component settings on a Shelly gen 1+ device
 version_added: "0.10.0"
 description:
   - Reads the current configuration for a Shelly switch (or relay) component.
-  - Updates any combination of in_mode, auto_on/off timers when they differ
-    from the requested values.
+  - Updates any combination of name, in_mode, auto_on/off timers when they
+    differ from the requested values.
   - All parameters except C(id) are optional; omitting one leaves it unchanged.
 options:
     id:
@@ -16,6 +16,11 @@ options:
           - Numeric switch/input channel identifier.
         required: true
         type: int
+    name:
+        description:
+          - Desired display name for this switch channel.
+        required: false
+        type: str
     in_mode:
         description:
           - Desired switch input mode.
@@ -75,13 +80,14 @@ restart_required:
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.connection import Connection
 
-SWITCH_KEYS = ("in_mode", "auto_on", "auto_on_delay", "auto_off", "auto_off_delay")
+SWITCH_KEYS = ("name", "in_mode", "auto_on", "auto_on_delay", "auto_off", "auto_off_delay")
 
 
 def run_module():
     module = AnsibleModule(
         argument_spec={
             "id": {"type": "int", "required": True},
+            "name": {"type": "str", "required": False, "default": None},
             "in_mode": {"type": "str", "required": False, "default": None},
             "auto_on": {"type": "bool", "required": False, "default": None},
             "auto_on_delay": {"type": "float", "required": False, "default": None},
