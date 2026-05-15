@@ -90,7 +90,7 @@ class HttpApi(HttpApiBase):
         try:
             response: HTTPResponse
             response, response_data = self.connection.send(
-                "/rpc", json.dumps(request_data), method="POST"
+                "/rpc", json.dumps(request_data, ensure_ascii=False), method="POST"
             )
 
             if response.getcode() == 401:

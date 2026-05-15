@@ -13,6 +13,7 @@ Current features include:
 * Basic device management (restarting remotely).
 * Managing the device API password.
 * MQTT settings management.
+* Switch input mode management.
 * WiFi settings mangement.
 * Script management.
 
@@ -22,7 +23,7 @@ As such, if the module's own documentation is lacking, please refer to [Shelly's
 ## Installing the Collection
 
 The collection can be installed using ansible-galaxy:
-`ansible-galaxy collection install git+https://github.com/skull132/enclave.shelly.git,main`
+`ansible-galaxy collection install git+https://github.com/pschmitt/enclave.shelly.git,main`
 
 ## Configuring Hosts
 
@@ -118,6 +119,14 @@ WiFi connection examples:
     password: some_secret
     enable: true
     ipv4mode: dhcp
+```
+
+Switch input mode management:
+```yaml
+- name: Set Shelly switch 0 to follow mode
+  enclave.shelly.switch:
+    id: 0
+    in_mode: follow
 ```
 
 Script management:

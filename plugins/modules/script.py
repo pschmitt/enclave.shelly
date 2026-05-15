@@ -121,27 +121,24 @@ def delete_script(script_state: ScriptState, connection: Connection) -> None:
 def get_current_script(script_state: ScriptState, connection: Connection) -> Optional[str]:
     to_read = 256
     offset = 0
-    remaining = to_read
-
-    request_data = {
-        "id": script_state.id,
-        "offset": offset,
-        "len": to_read
-    }
-
     code = ""
-    while offset < remaining:
+    while True:
         response = connection.send_request(
             data={
                 "method": "Script.GetCode",
-                "params": request_data
+                "params": {
+                    "id": script_state.id,
+                    "offset": offset,
+                    "len": to_read
+                }
             }
         )
 
-        offset += to_read
-        remaining = response["left"]
-
         code += response["data"]
+        offset += len(response["data"].encode("utf-8"))
+
+        if response["left"] == 0:
+            break
 
     if len(code) == 0:
         return None
@@ -149,10 +146,23 @@ def get_current_script(script_state: ScriptState, connection: Connection) -> Opt
         return code
     
 def get_new_code(path_str: str) -> str:
-    with open(path_str, "r") as file:
+    with open(path_str, "r", encoding="utf-8") as file:
         content = file.read()
 
     return content
+
+def add_script_diff(result, module: AnsibleModule, before: Optional[str], after: str) -> None:
+    if not module._diff:
+        return
+
+    result["diff"] = [
+        {
+            "before": before or "",
+            "after": after,
+            "before_header": f"remote script {module.params['name']}",
+            "after_header": module.params.get("script_path") or "deleted",
+        }
+    ]
 
 def update_script_code(code: str, script_state: ScriptState, connection: Connection) -> None:
     if script_state.running:
@@ -243,7 +253,10 @@ def run_module():
     current_script_state = get_script_state(module.params["name"], connection)
 
     if module.params["state"] in ["running", "present"]:
+        new_code = get_new_code(module.params["script_path"])
+
         if current_script_state is None:
+            add_script_diff(result, module, None, new_code)
             if not module.check_mode:
                 current_script_state = create_script(module.params["name"], connection)
             else:
@@ -252,6 +265,10 @@ def run_module():
             changed = True
     else:
         if current_script_state is not None:
+            if module._diff:
+                current_code = get_current_script(current_script_state, connection)
+                add_script_diff(result, module, current_code, "")
+
             if not module.check_mode:
                 delete_script(current_script_state, connection)
                 current_script_state = None
@@ -261,10 +278,11 @@ def run_module():
         return module.exit_json(**result)
     
     current_code = get_current_script(current_script_state, connection)
-    new_code = get_new_code(module.params["script_path"])
 
     if current_code is None or current_code != new_code:
         changed = True
+        add_script_diff(result, module, current_code, new_code)
+
         if not module.check_mode:
             update_script_code(new_code, current_script_state, connection)
             # Updating code will stop the script.
