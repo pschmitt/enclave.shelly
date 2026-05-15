@@ -18,6 +18,12 @@ options:
           - Numeric input channel identifier.
         required: true
         type: int
+    name:
+        description:
+          - Desired display name for this input channel (gen 2+ only).
+          - Silently ignored on gen 1 devices.
+        required: false
+        type: str
     enable:
         description:
           - Whether the input is enabled.
@@ -84,6 +90,7 @@ def run_module():
     module = AnsibleModule(
         argument_spec={
             "id": {"type": "int", "required": True},
+            "name": {"type": "str", "required": False, "default": None},
             "enable": {"type": "bool", "required": False, "default": None},
             "factory_reset": {"type": "bool", "required": False, "default": None},
         },
@@ -100,6 +107,8 @@ def run_module():
         )
 
     desired = {}
+    if module.params["name"] is not None:
+        desired["name"] = module.params["name"]
     if module.params["enable"] is not None:
         desired["enable"] = module.params["enable"]
     if module.params["factory_reset"] is not None:
