@@ -98,7 +98,7 @@ def _sta_changes(current_sta, desired):
     if current_sta.get("ssid") != desired["ssid"]:
         changes["ssid"] = desired["ssid"]
         if desired.get("psk"):
-            changes["pass"] = desired["psk"]
+            changes["psk"] = desired["psk"]
         changes["enable"] = desired.get("enable", True)
     elif current_sta.get("enable") != desired.get("enable", True):
         changes["enable"] = desired.get("enable", True)
@@ -127,8 +127,8 @@ def run_module():
         changes = _sta_changes(current_sta, desired)
         if changes:
             all_changes[sta_key] = changes
-            diff_before[sta_key] = {k: current_sta.get(k) for k in changes if k != "pass"}
-            diff_after[sta_key] = {k: v for k, v in changes.items() if k != "pass"}
+            diff_before[sta_key] = {k: current_sta.get(k) for k in changes if k != "psk"}
+            diff_after[sta_key] = {k: v for k, v in changes.items() if k != "psk"}
 
     result = dict(changed=bool(all_changes), diff={"before": diff_before, "after": diff_after})
 
