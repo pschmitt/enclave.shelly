@@ -370,6 +370,41 @@ class HttpApi(HttpApiBase):
                         )
             return {"restart_required": False}
 
+        if method == "WiFi.GetConfig":
+            settings = self._send_json_request("/settings", method="GET")
+            result = {}
+            for gen1_key, gen2_key in (("wifi_sta", "sta"), ("wifi_sta1", "sta1")):
+                sta = settings.get(gen1_key)
+                if sta is not None:
+                    result[gen2_key] = {
+                        "ssid": sta.get("ssid"),
+                        "enable": sta.get("enabled", False),
+                        "is_open": not bool(sta.get("key", "")),
+                    }
+            return result
+
+        if method == "WiFi.SetConfig":
+            config = data.get("params", {}).get("config", {})
+            sta = config.get("sta", {})
+            if sta:
+                query = {}
+                if "ssid" in sta:
+                    query["wifi_ssid"] = sta["ssid"]
+                if "pass" in sta:
+                    query["wifi_pass"] = sta["pass"]
+                if query:
+                    self._send_json_request(f"/settings?{urlencode(query)}", method="GET")
+            sta1 = config.get("sta1", {})
+            if sta1:
+                query1 = {}
+                if "ssid" in sta1:
+                    query1["wifi_ssid1"] = sta1["ssid"]
+                if "pass" in sta1:
+                    query1["wifi_pass1"] = sta1["pass"]
+                if query1:
+                    self._send_json_request(f"/settings?{urlencode(query1)}", method="GET")
+            return {"restart_required": False}
+
         if method == "Cover.GetConfig":
             roller_id = data.get("params", {}).get("id", 0)
             roller = self._send_json_request(f"/settings/roller/{roller_id}", method="GET")
