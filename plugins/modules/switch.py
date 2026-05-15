@@ -27,6 +27,13 @@ options:
           - Common values are C(flip), C(follow), and C(detached).
         required: false
         type: str
+    initial_state:
+        description:
+          - Desired power-on default state for this channel.
+          - Accepts C(on), C(off), C(restore_last), or C(match_input).
+          - Boolean C(true) is treated as C(on); C(false) is treated as C(off).
+        required: false
+        type: raw
     auto_on:
         description:
           - Enable the auto-on timer (switches the output on after C(auto_on_delay) seconds).
@@ -89,7 +96,7 @@ def run_module():
             "id": {"type": "int", "required": True},
             "name": {"type": "str", "required": False, "default": None},
             "in_mode": {"type": "str", "required": False, "default": None},
-            "initial_state": {"type": "str", "required": False, "default": None},
+            "initial_state": {"type": "raw", "required": False, "default": None},
             "auto_on": {"type": "bool", "required": False, "default": None},
             "auto_on_delay": {"type": "float", "required": False, "default": None},
             "auto_off": {"type": "bool", "required": False, "default": None},
@@ -99,6 +106,11 @@ def run_module():
     )
 
     connection = Connection(module._socket_path)
+
+    # Normalize boolean initial_state: true → "on", false → "off"
+    if isinstance(module.params.get("initial_state"), bool):
+        module.params["initial_state"] = "on" if module.params["initial_state"] else "off"
+
     current = connection.send_request(
         data={"method": "Switch.GetConfig", "params": {"id": module.params["id"]}}
     )
