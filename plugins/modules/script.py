@@ -68,14 +68,13 @@ restart_required:
   returned: always
 '''
 
-import hashlib
-
 from dataclasses import dataclass
 from typing import Optional
 
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.facts.compat import ansible_facts
 from ansible.module_utils.connection import Connection
+
+import ansible_collections.enclave.shelly.plugins.module_utils.helpers as shelly_utils
 
 @dataclass
 class ScriptState:
@@ -250,6 +249,15 @@ def run_module():
     changed = False
 
     connection = Connection(module._socket_path)
+    if shelly_utils.get_device_generation(connection) == 1:
+        if module.params["state"] == "deleted":
+            module.exit_json(**result)
+
+        module.fail_json(
+            msg="Shelly gen1 devices do not support scripts.",
+            **result,
+        )
+
     current_script_state = get_script_state(module.params["name"], connection)
 
     if module.params["state"] in ["running", "present"]:
