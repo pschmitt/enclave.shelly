@@ -3,11 +3,15 @@
 DOCUMENTATION = '''
 ---
 module: input
-short_description: Configure input component settings on a Shelly gen 2+ device.
+short_description: Configure input component settings on a Shelly gen 1+ device.
 version_added: "0.11.0"
 description:
   - Reads the current configuration for a Shelly input component.
   - Updates enable and/or factory_reset when they differ from the requested values.
+  - On gen 1 devices C(factory_reset) maps to the C(pon_wifi_reset) setting
+    (factory reset by power-toggling five times). C(enable) maps to C(btn_type)
+    on devices that expose it; devices without a configurable button (e.g.
+    Plug S) silently ignore C(enable).
 options:
     id:
         description:

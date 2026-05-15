@@ -166,6 +166,17 @@ class HttpApi(HttpApiBase):
 
         result = relay_settings.copy()
         result["in_mode"] = in_mode
+
+        # Gen1 stores auto timers as float seconds (0 = disabled).
+        # Normalise to gen2 bool + delay fields so modules can treat
+        # both generations identically.
+        for key in ("auto_on", "auto_off"):
+            delay_key = f"{key}_delay"
+            raw = relay_settings.get(key, 0.0)
+            if isinstance(raw, (int, float)):
+                result[key] = raw > 0
+                result[delay_key] = float(raw) if raw > 0 else 60.0
+
         return result
 
     def _legacy_scalar(self, value):
@@ -231,25 +242,82 @@ class HttpApi(HttpApiBase):
 
         if method == "Switch.SetConfig":
             switch_id = data.get("params", {}).get("id")
-            desired_in_mode = data.get("params", {}).get("config", {}).get("in_mode")
-            btn_type = {
-                "follow": "toggle",
-                "flip": "edge",
-                "detached": "detached",
-            }.get(desired_in_mode)
+            config = data.get("params", {}).get("config", {})
+            query = {}
 
-            if btn_type is None:
-                raise ConnectionError(
-                    f"Shelly gen1 devices do not support switch input mode '{desired_in_mode}'."
+            if "in_mode" in config:
+                btn_type = {
+                    "follow": "toggle",
+                    "flip": "edge",
+                    "detached": "detached",
+                }.get(config["in_mode"])
+                if btn_type is None:
+                    raise ConnectionError(
+                        f"Shelly gen1 devices do not support switch input mode '{config['in_mode']}'."
+                    )
+                query["btn_type"] = btn_type
+
+            if "auto_on" in config:
+                query["auto_on"] = config["auto_on_delay"] if config["auto_on"] else 0
+
+            if "auto_off" in config:
+                query["auto_off"] = config["auto_off_delay"] if config["auto_off"] else 0
+
+            if query:
+                self._send_json_request(
+                    f"/settings/relay/{switch_id}?{urlencode(query)}",
+                    method="GET",
                 )
+            return {"restart_required": False}
 
-            self._send_json_request(
-                f"/settings/relay/{switch_id}?{urlencode({'btn_type': btn_type})}",
-                method="GET",
-            )
+        if method == "Input.GetConfig":
+            channel_id = data.get("params", {}).get("id", 0)
+            settings = self._send_json_request("/settings", method="GET")
+            try:
+                relay = self._send_json_request(f"/settings/relay/{channel_id}", method="GET")
+            except Exception:
+                relay = {}
+            btn_type = relay.get("btn_type")
             return {
-                "restart_required": False
+                "id": channel_id,
+                "enable": (btn_type != "detached") if btn_type is not None else True,
+                "factory_reset": settings.get("pon_wifi_reset", False),
             }
+
+        if method == "Input.SetConfig":
+            channel_id = data.get("params", {}).get("id", 0)
+            config = data.get("params", {}).get("config", {})
+            if "factory_reset" in config:
+                self._send_json_request(
+                    f"/settings?{urlencode({'pon_wifi_reset': self._legacy_scalar(config['factory_reset'])})}",
+                    method="GET",
+                )
+            if "enable" in config:
+                try:
+                    relay = self._send_json_request(f"/settings/relay/{channel_id}", method="GET")
+                except Exception:
+                    relay = {}
+                if "btn_type" in relay:
+                    btn_type = "toggle" if config["enable"] else "detached"
+                    self._send_json_request(
+                        f"/settings/relay/{channel_id}?{urlencode({'btn_type': btn_type})}",
+                        method="GET",
+                    )
+            return {}
+
+        if method == "Sys.GetConfig":
+            settings = self._send_json_request("/settings", method="GET")
+            return {"device": {"name": settings.get("name")}}
+
+        if method == "Sys.SetConfig":
+            config = data.get("params", {}).get("config", {})
+            device_cfg = config.get("device", {})
+            query = {}
+            if "name" in device_cfg:
+                query["name"] = device_cfg["name"]
+            if query:
+                self._send_json_request(f"/settings?{urlencode(query)}", method="GET")
+            return {"restart_required": False}
 
         if method == "Script.List":
             return {
