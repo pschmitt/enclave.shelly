@@ -116,6 +116,13 @@ def run_module():
 
     changes = {k: v for k, v in desired.items() if current.get(k) != v}
 
+    # When only the delay changed, carry the current enabled state into changes
+    # so gen1 translation always has the full auto_on/off state available.
+    for prefix in ("auto_on", "auto_off"):
+        delay_key = f"{prefix}_delay"
+        if delay_key in changes and prefix not in changes and prefix in current:
+            changes[prefix] = current[prefix]
+
     result = dict(changed=bool(changes), restart_required=False)
 
     if not changes or module.check_mode:
