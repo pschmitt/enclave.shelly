@@ -390,8 +390,8 @@ class HttpApi(HttpApiBase):
                 query = {}
                 if "ssid" in sta:
                     query["wifi_ssid"] = sta["ssid"]
-                if "psk" in sta:
-                    query["wifi_pass"] = sta["psk"]
+                if "pass" in sta:
+                    query["wifi_pass"] = sta["pass"]
                 if query:
                     self._send_json_request(f"/settings?{urlencode(query)}", method="GET")
             sta1 = config.get("sta1", {})
@@ -399,8 +399,8 @@ class HttpApi(HttpApiBase):
                 query1 = {}
                 if "ssid" in sta1:
                     query1["wifi_ssid1"] = sta1["ssid"]
-                if "psk" in sta1:
-                    query1["wifi_pass1"] = sta1["psk"]
+                if "pass" in sta1:
+                    query1["wifi_pass1"] = sta1["pass"]
                 if query1:
                     self._send_json_request(f"/settings?{urlencode(query1)}", method="GET")
             return {"restart_required": False}
