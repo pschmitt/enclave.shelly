@@ -116,6 +116,12 @@ def run_module():
 
     changes = {k: v for k, v in desired.items() if current.get(k) != v}
 
+    # Capture diff before carry so carried-but-unchanged values don't appear.
+    diff = {
+        "before": {k: current.get(k) for k in changes},
+        "after": dict(changes),
+    }
+
     # When only the delay changed, carry the current enabled state into changes
     # so gen1 translation always has the full auto_on/off state available.
     for prefix in ("auto_on", "auto_off"):
@@ -123,7 +129,7 @@ def run_module():
         if delay_key in changes and prefix not in changes and prefix in current:
             changes[prefix] = current[prefix]
 
-    result = dict(changed=bool(changes), restart_required=False)
+    result = dict(changed=bool(changes), restart_required=False, diff=diff)
 
     if not changes or module.check_mode:
         module.exit_json(**result)

@@ -65,9 +65,11 @@ def run_module():
     current_name = get_device_name(connection)
     desired_name = module.params["name"]
 
-    result = dict(changed=current_name != desired_name, previous_name=current_name)
+    changed = current_name != desired_name
+    diff = {"before": {"name": current_name}, "after": {"name": desired_name}}
+    result = dict(changed=changed, previous_name=current_name, diff=diff)
 
-    if not result["changed"] or module.check_mode:
+    if not changed or module.check_mode:
         module.exit_json(**result)
 
     set_device_name(desired_name, connection)

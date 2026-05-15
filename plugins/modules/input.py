@@ -119,7 +119,11 @@ def run_module():
 
     changes = {k: v for k, v in desired.items() if current.get(k) != v}
 
-    result = dict(changed=bool(changes), previous_config=current)
+    diff = {
+        "before": {k: current.get(k) for k in changes},
+        "after": dict(changes),
+    }
+    result = dict(changed=bool(changes), previous_config=current, diff=diff)
 
     if not changes or module.check_mode:
         module.exit_json(**result)
