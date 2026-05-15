@@ -177,6 +177,14 @@ class HttpApi(HttpApiBase):
                 result[key] = raw > 0
                 result[delay_key] = float(raw) if raw > 0 else 60.0
 
+        # Map gen1 default_state to gen2 initial_state.
+        default_state = relay_settings.get("default_state")
+        if default_state is not None:
+            result["initial_state"] = {
+                "last": "restore_last",
+                "switch": "match_input",
+            }.get(default_state, default_state)
+
         return result
 
     def _legacy_scalar(self, value):
@@ -260,6 +268,12 @@ class HttpApi(HttpApiBase):
                     )
                 query["btn_type"] = btn_type
 
+            if "initial_state" in config:
+                query["default_state"] = {
+                    "restore_last": "last",
+                    "match_input": "switch",
+                }.get(config["initial_state"], config["initial_state"])
+
             if "auto_on" in config:
                 query["auto_on"] = config["auto_on_delay"] if config["auto_on"] else 0
 
@@ -310,11 +324,24 @@ class HttpApi(HttpApiBase):
 
         if method == "Sys.GetConfig":
             settings = self._send_json_request("/settings", method="GET")
+            device = {
+                "name": settings.get("name"),
+                "eco_mode": settings.get("eco_mode_enabled"),
+            }
+            if "led_status_disable" in settings or "led_power_disable" in settings:
+                leds = {}
+                if "led_status_disable" in settings:
+                    leds["status"] = not settings["led_status_disable"]
+                if "led_power_disable" in settings:
+                    leds["power"] = not settings["led_power_disable"]
+                device["leds"] = leds
             return {
-                "device": {
-                    "name": settings.get("name"),
-                    "eco_mode": settings.get("eco_mode_enabled"),
-                }
+                "device": device,
+                "ui_data": {
+                    "consumption_types": [
+                        r.get("appliance_type") for r in settings.get("relays", [])
+                    ],
+                },
             }
 
         if method == "Sys.SetConfig":
@@ -325,8 +352,21 @@ class HttpApi(HttpApiBase):
                 query["name"] = device_cfg["name"]
             if "eco_mode" in device_cfg:
                 query["eco_mode_enabled"] = self._legacy_scalar(device_cfg["eco_mode"])
+            leds = device_cfg.get("leds", {})
+            if "status" in leds:
+                query["led_status_disable"] = self._legacy_scalar(not leds["status"])
+            if "power" in leds:
+                query["led_power_disable"] = self._legacy_scalar(not leds["power"])
             if query:
                 self._send_json_request(f"/settings?{urlencode(query)}", method="GET")
+            consumption_types = config.get("ui_data", {}).get("consumption_types")
+            if consumption_types:
+                for i, ct in enumerate(consumption_types):
+                    if ct is not None:
+                        self._send_json_request(
+                            f"/settings/relay/{i}?{urlencode({'appliance_type': ct})}",
+                            method="GET",
+                        )
             return {"restart_required": False}
 
         if method == "Script.List":

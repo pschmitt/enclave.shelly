@@ -80,7 +80,7 @@ restart_required:
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.connection import Connection
 
-SWITCH_KEYS = ("name", "in_mode", "auto_on", "auto_on_delay", "auto_off", "auto_off_delay")
+SWITCH_KEYS = ("name", "in_mode", "initial_state", "auto_on", "auto_on_delay", "auto_off", "auto_off_delay")
 
 
 def run_module():
@@ -89,6 +89,7 @@ def run_module():
             "id": {"type": "int", "required": True},
             "name": {"type": "str", "required": False, "default": None},
             "in_mode": {"type": "str", "required": False, "default": None},
+            "initial_state": {"type": "str", "required": False, "default": None},
             "auto_on": {"type": "bool", "required": False, "default": None},
             "auto_on_delay": {"type": "float", "required": False, "default": None},
             "auto_off": {"type": "bool", "required": False, "default": None},
