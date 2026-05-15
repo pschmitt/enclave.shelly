@@ -310,7 +310,12 @@ class HttpApi(HttpApiBase):
 
         if method == "Sys.GetConfig":
             settings = self._send_json_request("/settings", method="GET")
-            return {"device": {"name": settings.get("name")}}
+            return {
+                "device": {
+                    "name": settings.get("name"),
+                    "eco_mode": settings.get("eco_mode_enabled"),
+                }
+            }
 
         if method == "Sys.SetConfig":
             config = data.get("params", {}).get("config", {})
@@ -318,6 +323,8 @@ class HttpApi(HttpApiBase):
             query = {}
             if "name" in device_cfg:
                 query["name"] = device_cfg["name"]
+            if "eco_mode" in device_cfg:
+                query["eco_mode_enabled"] = self._legacy_scalar(device_cfg["eco_mode"])
             if query:
                 self._send_json_request(f"/settings?{urlencode(query)}", method="GET")
             return {"restart_required": False}
