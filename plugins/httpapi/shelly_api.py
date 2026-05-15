@@ -327,6 +327,7 @@ class HttpApi(HttpApiBase):
             device = {
                 "name": settings.get("name"),
                 "eco_mode": settings.get("eco_mode_enabled"),
+                "profile": None,
             }
             if "led_status_disable" in settings or "led_power_disable" in settings:
                 leds = {}
@@ -367,6 +368,43 @@ class HttpApi(HttpApiBase):
                             f"/settings/relay/{i}?{urlencode({'appliance_type': ct})}",
                             method="GET",
                         )
+            return {"restart_required": False}
+
+        if method == "Cover.GetConfig":
+            roller_id = data.get("params", {}).get("id", 0)
+            roller = self._send_json_request(f"/settings/roller/{roller_id}", method="GET")
+            obs_action = roller.get("obstacle_action", "stop")
+            return {
+                "id": roller_id,
+                "name": roller.get("name"),
+                "invert_directions": roller.get("swap_inputs", False) or roller.get("swap_outputs", False),
+                "obstruction_detection": {
+                    "enable": roller.get("obstacle_power", 0) > 0,
+                    "action": "reverse" if obs_action == "back" else obs_action,
+                    "power_thr": roller.get("obstacle_power", 0),
+                },
+            }
+
+        if method == "Cover.SetConfig":
+            roller_id = data.get("params", {}).get("id", 0)
+            config = data.get("params", {}).get("config", {})
+            query = {}
+            if "name" in config:
+                query["name"] = config["name"]
+            if "invert_directions" in config:
+                v = self._legacy_scalar(config["invert_directions"])
+                query["swap_inputs"] = v
+                query["swap_outputs"] = v
+            obs = config.get("obstruction_detection", {})
+            if "action" in obs:
+                query["obstacle_action"] = "back" if obs["action"] == "reverse" else obs["action"]
+            if "power_thr" in obs:
+                query["obstacle_power"] = self._legacy_scalar(obs["power_thr"])
+            if query:
+                self._send_json_request(
+                    f"/settings/roller/{roller_id}?{urlencode(query)}",
+                    method="GET",
+                )
             return {"restart_required": False}
 
         if method == "Script.List":
