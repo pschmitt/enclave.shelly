@@ -130,8 +130,49 @@ from ansible.module_utils.connection import Connection
 import ansible_collections.enclave.shelly.plugins.module_utils.helpers as shelly_utils
 import re
 
+
+GEN1_UNSUPPORTED_KEYS = {
+    "ssl_ca",
+    "topic_prefix",
+    "rpc_ntf",
+    "status_ntf",
+    "use_client_cert",
+    "enable_control",
+}
+
+
 def is_default_client_id(client_id: str) -> bool:
-    return re.match(r"^shelly[a-z0-9]+-[0-9a-f]+$", client_id) is not None
+    return re.match(r"^shelly[a-z0-9-]+-[0-9a-f]+$", client_id) is not None
+
+
+def derive_gen1_client_id(params):
+    if params["client_id"] is not None:
+        return params["client_id"]
+
+    topic_prefix = params.get("topic_prefix")
+    if topic_prefix is None:
+        return None
+
+    return topic_prefix.rstrip("/").split("/")[-1]
+
+
+def validate_required_settings(module, params, is_gen1):
+    if params["enable"] is not True:
+        return
+
+    required_keys = ["server"]
+    if not is_gen1:
+        required_keys.extend(["client_id", "user", "ssl_ca", "topic_prefix"])
+
+    missing_keys = [key for key in required_keys if params.get(key) is None]
+    if missing_keys:
+        module.fail_json(
+            msg=(
+                "Missing required MQTT settings for this Shelly device generation: "
+                + ", ".join(missing_keys)
+            )
+        )
+
 
 def run_module():
     module_args = {
@@ -151,9 +192,6 @@ def run_module():
     module = AnsibleModule(
         argument_spec=module_args,
         supports_check_mode=True,
-        required_if=[
-            ("enable", True, ("server", "client_id", "user", "ssl_ca", "topic_prefix"))
-        ]
     )
 
     result = dict(
@@ -161,15 +199,27 @@ def run_module():
         restart_required=False
     )
 
-    default_client_id_requested = module.params["client_id"] == ""
-
-    if module.params["enable"] == True:
-        module.params = shelly_utils.optional_strs_to_none(module.params, ["server", "client_id", "user", "pass", "topic_prefix"])
-
-    if module.params["ssl_ca"] == "none":
-        module.params["ssl_ca"] = None
-
     connection = Connection(module._socket_path)
+    device_generation = shelly_utils.get_device_generation(connection)
+    is_gen1 = device_generation == 1
+
+    params = module.params.copy()
+    default_client_id_requested = params["client_id"] == ""
+
+    if params["enable"] is True:
+        params = shelly_utils.optional_strs_to_none(
+            params,
+            ["server", "client_id", "user", "pass", "topic_prefix"],
+        )
+
+        if is_gen1:
+            params["client_id"] = derive_gen1_client_id(params)
+
+    if params["ssl_ca"] == "none":
+        params["ssl_ca"] = None
+
+    validate_required_settings(module, params, is_gen1)
+
     current_config = connection.send_request(
         data={
             "method": "MQTT.GetConfig"
@@ -183,7 +233,15 @@ def run_module():
     )
 
     new_config = current_config.copy()
-    for key, desired_value in module.params.items():
+    keys_to_compare = params.keys()
+    if is_gen1:
+        keys_to_compare = [
+            key for key in params.keys()
+            if key not in GEN1_UNSUPPORTED_KEYS
+        ]
+
+    for key in keys_to_compare:
+        desired_value = params[key]
         if key == "pass" and key not in current_config:
             if desired_value is not None:
                 # The Shelly API accepts the MQTT password in SetConfig but

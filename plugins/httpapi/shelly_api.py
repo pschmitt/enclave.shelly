@@ -2,9 +2,11 @@ DOCUMENTATION = """
 ---
 author: RustedSkull (@skull132)
 httpapi: shelly
-short_description: A network OS to interface with Shelly gen 2+ home automation devices.
+short_description: A network OS to interface with Shelly gen 1+ home automation devices.
 description: 
-  - This HttpApi plugin provides a way of talking to a Shelly gen 2+ home automation device via its JSONRPCv2 API over POST.
+  - This HttpApi plugin provides a way of talking to Shelly devices over HTTP.
+  - Shelly gen 2+ devices use the JSON-RPC API on C(/rpc).
+  - Shelly gen 1 devices use the legacy REST-like HTTP endpoints.
 """
 
 FACTS_MODULES = ["enclave.shelly.shelly_api_facts"]
@@ -13,6 +15,7 @@ FACTS_MODULES = ["enclave.shelly.shelly_api_facts"]
 import json
 import hashlib
 import secrets
+from urllib.parse import urlencode
 
 from ansible.plugins.httpapi import HttpApiBase
 from ansible.errors import AnsibleConnectionFailure
@@ -30,6 +33,8 @@ class HttpApi(HttpApiBase):
 
         self._request_id = 0
         self._shelly_password = None
+        self._device_info = None
+        self._device_generation = None
 
     @property
     def request_id(self):
@@ -74,7 +79,188 @@ class HttpApi(HttpApiBase):
 
         return header_dict
 
-    def send_request(self, data, **message_kwargs):
+    @property
+    def device_info(self):
+        if self._device_info is None:
+            self._device_info = self._load_device_info()
+
+        return self._device_info
+
+    @property
+    def device_generation(self):
+        if self._device_generation is None:
+            generation = self.device_info.get("gen")
+            if generation is None and "type" in self.device_info:
+                generation = 1
+
+            self._device_generation = generation or 2
+
+        return self._device_generation
+
+    def _load_device_info(self):
+        try:
+            device_info = self._send_rpc_request(
+                data={
+                    "method": "Shelly.GetDeviceInfo"
+                }
+            )
+        except Exception as exc:
+            exc_text = to_text(exc)
+            if "Not Found" not in exc_text and "HTTP 404" not in exc_text:
+                raise
+
+            device_info = self._send_json_request("/shelly", method="GET")
+
+        if "gen" not in device_info and "type" in device_info:
+            device_info["gen"] = 1
+
+        return device_info
+
+    def _send_json_request(self, path, data="", method="GET"):
+        response, response_data = self.connection.send(path, data, method=method)
+        value = to_text(response_data.getvalue())
+
+        if response.getcode() < 200 or response.getcode() >= 300:
+            raise ConnectionError(
+                f"Shelly API returned HTTP {response.getcode()} for {path}: {value}"
+            )
+
+        if not value:
+            return {}
+
+        try:
+            return json.loads(value)
+        except ValueError:
+            raise ConnectionError("Invalid JSON response: %s" % value)
+
+    def _normalize_legacy_mqtt_config(self, settings):
+        mqtt_settings = settings.get("mqtt", {})
+        result = {
+            "enable": mqtt_settings.get("enable"),
+            "server": mqtt_settings.get("server"),
+            "client_id": mqtt_settings.get("id"),
+            "user": mqtt_settings.get("user"),
+        }
+        result.update(
+            {
+                "ssl_ca": None,
+                "rpc_ntf": True,
+                "status_ntf": False,
+                "use_client_cert": False,
+                "enable_control": True,
+            }
+        )
+
+        return result
+
+    def _normalize_legacy_mqtt_status(self, status):
+        return status.get("mqtt", {})
+
+    def _normalize_legacy_switch_config(self, relay_settings):
+        btn_type = relay_settings.get("btn_type")
+        in_mode = {
+            "toggle": "follow",
+            "edge": "flip",
+            "detached": "detached",
+        }.get(btn_type, btn_type)
+
+        result = relay_settings.copy()
+        result["in_mode"] = in_mode
+        return result
+
+    def _legacy_scalar(self, value):
+        if value is None:
+            return ""
+
+        if isinstance(value, bool):
+            return "true" if value else "false"
+
+        return str(value)
+
+    def _send_legacy_request(self, data):
+        method = data["method"]
+
+        if method == "Shelly.GetDeviceInfo":
+            return self.device_info
+
+        if method == "Shelly.GetStatus":
+            return self._send_json_request("/status", method="GET")
+
+        if method == "Shelly.Reboot":
+            return self._send_json_request("/reboot", method="GET")
+
+        if method == "MQTT.GetConfig":
+            return self._normalize_legacy_mqtt_config(
+                self._send_json_request("/settings", method="GET")
+            )
+
+        if method == "MQTT.GetStatus":
+            return self._normalize_legacy_mqtt_status(
+                self._send_json_request("/status", method="GET")
+            )
+
+        if method == "MQTT.SetConfig":
+            config = data.get("params", {}).get("config", {})
+            field_map = {
+                "enable": "mqtt_enable",
+                "server": "mqtt_server",
+                "client_id": "mqtt_id",
+                "user": "mqtt_user",
+                "pass": "mqtt_pass",
+            }
+            query = {}
+            for source_key, target_key in field_map.items():
+                if source_key in config:
+                    query[target_key] = self._legacy_scalar(config[source_key])
+
+            if query:
+                self._send_json_request(
+                    f"/settings?{urlencode(query)}",
+                    method="GET",
+                )
+
+            return {
+                "restart_required": bool(query)
+            }
+
+        if method == "Switch.GetConfig":
+            switch_id = data.get("params", {}).get("id")
+            return self._normalize_legacy_switch_config(
+                self._send_json_request(f"/settings/relay/{switch_id}", method="GET")
+            )
+
+        if method == "Switch.SetConfig":
+            switch_id = data.get("params", {}).get("id")
+            desired_in_mode = data.get("params", {}).get("config", {}).get("in_mode")
+            btn_type = {
+                "follow": "toggle",
+                "flip": "edge",
+                "detached": "detached",
+            }.get(desired_in_mode)
+
+            if btn_type is None:
+                raise ConnectionError(
+                    f"Shelly gen1 devices do not support switch input mode '{desired_in_mode}'."
+                )
+
+            self._send_json_request(
+                f"/settings/relay/{switch_id}?{urlencode({'btn_type': btn_type})}",
+                method="GET",
+            )
+            return {
+                "restart_required": False
+            }
+
+        if method == "Script.List":
+            return {
+                "scripts": []
+            }
+
+        raise ConnectionError(
+            f"Shelly gen1 devices do not support the '{method}' API method."
+        )
+
+    def _send_rpc_request(self, data):
         request_data = {
             "id": self.request_id,
             "method": data["method"],
@@ -87,64 +273,70 @@ class HttpApi(HttpApiBase):
         if "auth" in data.keys():
             request_data["auth"] = data["auth"]
 
+        response: HTTPResponse
+        response, response_data = self.connection.send(
+            "/rpc", json.dumps(request_data, ensure_ascii=False), method="POST"
+        )
+
+        if response.getcode() == 401:
+            if "auth" in data:
+                raise ConnectionError("Shelly API requires auth, currently provided credentials did not work. This is a library or device bug.")
+
+            if not self.auth_available():
+                raise ConnectionError("Shelly API requires auth, but no ansible_httpapi_password was provided for host.")
+            
+            authenticate_request = response.getheader("WWW-Authenticate")
+            if authenticate_request is None:
+                raise ConnectionError("Shelly API requires auth, but did not populate WWW-Authenticate header.")
+            
+            headers = self.process_authenticate_header(authenticate_request)
+            nonce = headers["nonce"]
+            realm = headers["realm"]
+            client_nonce = self.client_nonce()
+            data["auth"] = {
+                "realm": realm,
+                "username": "admin",
+                "nonce": nonce,
+                "cnonce": client_nonce,
+                # nc = 1 because it's only asked over WS.
+                "response": hash_string(f"{self.ha1(realm)}:{nonce}:1:{client_nonce}:auth:{self.ha2()}"),
+                "algorithm": "SHA-256"
+            }
+
+            return self._send_rpc_request(data)
+
+        value = to_text(response_data.getvalue())
         try:
-            response: HTTPResponse
-            response, response_data = self.connection.send(
-                "/rpc", json.dumps(request_data, ensure_ascii=False), method="POST"
-            )
-
-            if response.getcode() == 401:
-                if "auth" in data:
-                    raise ConnectionError("Shelly API requires auth, currently provided credentials did not work. This is a library or device bug.")
-
-                if not self.auth_available():
-                    raise ConnectionError("Shelly API requires auth, but no ansible_httpapi_password was provided for host.")
-                
-                authenticate_request = response.getheader("WWW-Authenticate")
-                if authenticate_request is None:
-                    raise ConnectionError("Shelly API requires auth, but did not populate WWW-Authenticate header.")
-                
-                headers = self.process_authenticate_header(authenticate_request)
-                nonce = headers["nonce"]
-                realm = headers["realm"]
-                client_nonce = self.client_nonce()
-                data["auth"] = {
-                    "realm": realm,
-                    "username": "admin",
-                    "nonce": nonce,
-                    "cnonce": client_nonce,
-                    # nc = 1 because it's only asked over WS.
-                    "response": hash_string(f"{self.ha1(realm)}:{nonce}:1:{client_nonce}:auth:{self.ha2()}"),
-                    "algorithm": "SHA-256"
-                }
-
-                return self.send_request(data)
-
-            value = to_text(response_data.getvalue())
-            try:
-                json_data = json.loads(value) if value else {}
-                # JSONDecodeError only available on Python 3.5+
-            except ValueError:
-                raise ConnectionError("Invalid JSON response: %s" % value)
-            
-            if "error" in json_data:
-                raise ConnectionError(
-                    "REST API returned %s when sending %s"
-                        % (
-                            json_data["error"],
-                            remove_values(
-                                data,
-                                [
-                                    self.connection.get_option("password"),
-                                ],
-                            ),
-                        )
+            json_data = json.loads(value) if value else {}
+            # JSONDecodeError only available on Python 3.5+
+        except ValueError:
+            raise ConnectionError("Invalid JSON response: %s" % value)
+        
+        if "error" in json_data:
+            raise ConnectionError(
+                "REST API returned %s when sending %s"
+                    % (
+                        json_data["error"],
+                        remove_values(
+                            data,
+                            [
+                                self.connection.get_option("password"),
+                            ],
+                        ),
                     )
-            
-            if "result" in json_data:
-                json_data = json_data["result"]
-            
-            return json_data
+                )
+        
+        if "result" in json_data:
+            json_data = json_data["result"]
+        
+        return json_data
+
+    def send_request(self, data, **message_kwargs):
+        try:
+            if self.device_generation == 1:
+                return self._send_legacy_request(data)
+
+            return self._send_rpc_request(data)
         except AnsibleConnectionFailure as e:
             e_text = to_text(e.message)
             if to_text("Could not connect to") in e_text:

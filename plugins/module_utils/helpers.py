@@ -1,8 +1,8 @@
 #!/usr/bin/python
 
 import asyncio
-import typing
 import dataclasses
+import typing
 
 from typing import Any, Optional
 from ansible.module_utils.connection import Connection
@@ -23,6 +23,24 @@ def optional_strs_to_none(input: dict[str, Any], keys: Optional[str]) -> dict[st
                 output[key] = None
 
     return output
+
+
+def get_device_info(connection: Connection) -> dict[str, Any]:
+    return connection.send_request(
+        data={
+            "method": "Shelly.GetDeviceInfo"
+        }
+    )
+
+
+def get_device_generation(connection: Connection) -> int:
+    device_info = get_device_info(connection)
+    generation = device_info.get("gen")
+    if generation is None and "type" in device_info:
+        return 1
+
+    return generation or 2
+
 
 def dataclass_into_ansible_spec(dataclass: type) -> dict[str, dict]:
     accepted_trivial_types = [str, int, bool, float]
@@ -69,15 +87,14 @@ def poll_for_connection(timeout: int, connection: Connection) -> bool:
             await asyncio.sleep(steps / 1000)
 
             try:
-                code, _ = connection.send_request(
+                connection.send_request(
                     data={
                         "method": "Shelly.GetStatus"
                     }
                 )
 
-                if code >= 200 and code <= 300:
-                    device_available = True
-                    break
+                device_available = True
+                break
             except:
                 pass
 

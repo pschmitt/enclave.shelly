@@ -1,13 +1,15 @@
 # Ansible Collection - enclave.shelly
 
-A collection for managing Shelly gen 2+ home automation devices via ansible.
+A collection for managing Shelly gen 1+ home automation devices via ansible.
 
 The goal of the collection is to enable the management of a fleet of Shelly devices
 from a single point of truth.
 
-The module works by invoking the JSON-RPCv2 API that Shelly devices expose over HTTP.
-The module supports the authentication scheme which Shelly devices use for this method of
-communication.
+The collection talks to Shelly devices over HTTP:
+
+* Shelly gen 2+ devices use the JSON-RPCv2 API exposed on `/rpc`.
+* Shelly gen 1 devices use the legacy `/shelly`, `/settings`, `/status`, `/reboot`,
+  and `/settings/relay/{id}` endpoints.
 
 Current features include:
 * Basic device management (restarting remotely).
@@ -16,6 +18,10 @@ Current features include:
 * Switch input mode management.
 * WiFi settings mangement.
 * Script management.
+
+Shelly gen 1 compatibility currently covers facts, device reboot, MQTT settings,
+and relay input-mode management. Scripts remain a gen 2+ only feature; deleting a
+script on a gen 1 device is treated as a no-op.
 
 A lot of the modules accept inputs which transparently modify the settings exposed via API.
 As such, if the module's own documentation is lacking, please refer to [Shelly's own API documentation](https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/Introduction).
