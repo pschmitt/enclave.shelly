@@ -153,7 +153,11 @@ def derive_gen1_client_id(params):
     if topic_prefix is None:
         return None
 
-    return topic_prefix.rstrip("/")
+    topic_prefix = topic_prefix.rstrip("/")
+    if topic_prefix.startswith("shellies/"):
+        return topic_prefix.removeprefix("shellies/")
+
+    return topic_prefix
 
 
 def validate_required_settings(module, params, is_gen1):
