@@ -372,7 +372,7 @@ class HttpApi(HttpApiBase):
 
         if method == "WiFi.GetConfig":
             settings = self._send_json_request("/settings", method="GET")
-            result = {}
+            result = {"ap": {}}
             for gen1_key, gen2_key in (("wifi_sta", "sta"), ("wifi_sta1", "sta1")):
                 sta = settings.get(gen1_key)
                 if sta is not None:
@@ -385,6 +385,10 @@ class HttpApi(HttpApiBase):
 
         if method == "WiFi.SetConfig":
             config = data.get("params", {}).get("config", {})
+            if config.get("ap"):
+                raise ConnectionError(
+                    "Shelly gen1 devices do not support WiFi AP or range extender configuration."
+                )
             sta = config.get("sta", {})
             if sta:
                 query = {}

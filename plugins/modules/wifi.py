@@ -3,13 +3,13 @@
 DOCUMENTATION = '''
 ---
 module: wifi
-short_description: Configure WiFi station settings on a Shelly gen 1+ device.
+short_description: Configure WiFi station and access-point settings on a Shelly gen 1+ device.
 version_added: "0.21.0"
 description:
-  - Reads current WiFi station config via WiFi.GetConfig.
-  - Updates sta and/or sta1 when the SSID or enable state differs.
+  - Reads current WiFi config via WiFi.GetConfig.
+  - Updates sta, sta1, and/or ap sections when the configuration differs.
   - PSK/password comparison is intentionally skipped because devices do not
-    expose the stored credential. The password is only sent when the SSID
+    expose the stored credential. Passwords are only sent when the SSID
     changes. To force a password-only update, change the SSID temporarily or
     reconfigure the device manually.
 options:
@@ -51,6 +51,35 @@ options:
                 required: false
                 type: bool
                 default: true
+    ap:
+        description: Access point (AP) and range extender configuration.
+        required: false
+        type: dict
+        suboptions:
+            ssid:
+                description: SSID for the access point.
+                required: false
+                type: str
+            pass:
+                description: >
+                  Password for the access point. Only sent when the SSID
+                  changes.
+                required: false
+                type: str
+                no_log: true
+            enable:
+                description: Enable the access point.
+                required: false
+                type: bool
+            range_extender:
+                description: Range extender (WiFi repeater) configuration.
+                required: false
+                type: dict
+                suboptions:
+                    enable:
+                        description: Enable range extender mode.
+                        required: true
+                        type: bool
 author:
     - pschmitt
 '''
@@ -70,6 +99,21 @@ EXAMPLES = '''
     sta1:
       ssid: my-fallback-network
       psk: alsosecret
+
+- name: Enable AP with range extender
+  enclave.shelly.wifi:
+    ap:
+      ssid: shelly-extender
+      pass: appassword
+      enable: true
+      range_extender:
+        enable: true
+
+- name: Disable range extender only
+  enclave.shelly.wifi:
+    ap:
+      range_extender:
+        enable: false
 '''
 
 RETURN = '''
@@ -88,6 +132,19 @@ _STA_SPEC = {
     "psk": {"type": "str", "required": False, "default": None, "no_log": True},
     "enable": {"type": "bool", "required": False, "default": True},
 }
+_AP_SPEC = {
+    "ssid": {"type": "str", "required": False, "default": None},
+    "pass": {"type": "str", "required": False, "default": None, "no_log": True},
+    "enable": {"type": "bool", "required": False, "default": None},
+    "range_extender": {
+        "type": "dict",
+        "required": False,
+        "default": None,
+        "options": {
+            "enable": {"type": "bool", "required": True},
+        },
+    },
+}
 
 
 def _sta_changes(current_sta, desired):
@@ -105,11 +162,35 @@ def _sta_changes(current_sta, desired):
     return changes
 
 
+def _ap_changes(current_ap, desired):
+    """Return config dict to send for the AP, or {} if already correct."""
+    if desired is None:
+        return {}
+    changes = {}
+
+    if desired.get("ssid") is not None and current_ap.get("ssid") != desired["ssid"]:
+        changes["ssid"] = desired["ssid"]
+        if desired.get("pass"):
+            changes["pass"] = desired["pass"]
+
+    if desired.get("enable") is not None and current_ap.get("enable") != desired["enable"]:
+        changes["enable"] = desired["enable"]
+
+    desired_re = desired.get("range_extender")
+    if desired_re is not None:
+        current_re = current_ap.get("range_extender") or {}
+        if current_re.get("enable") != desired_re["enable"]:
+            changes["range_extender"] = {"enable": desired_re["enable"]}
+
+    return changes
+
+
 def run_module():
     module = AnsibleModule(
         argument_spec={
             "sta": {"type": "dict", "required": False, "default": None, "options": _STA_SPEC},
             "sta1": {"type": "dict", "required": False, "default": None, "options": _STA_SPEC},
+            "ap": {"type": "dict", "required": False, "default": None, "options": _AP_SPEC},
         },
         supports_check_mode=True,
     )
@@ -129,6 +210,14 @@ def run_module():
             all_changes[sta_key] = changes
             diff_before[sta_key] = {k: current_sta.get(k) for k in changes if k != "pass"}
             diff_after[sta_key] = {k: v for k, v in changes.items() if k != "pass"}
+
+    desired_ap = module.params["ap"]
+    current_ap = current.get("ap") or {}
+    ap_changes = _ap_changes(current_ap, desired_ap)
+    if ap_changes:
+        all_changes["ap"] = ap_changes
+        diff_before["ap"] = {k: current_ap.get(k) for k in ap_changes if k != "pass"}
+        diff_after["ap"] = {k: v for k, v in ap_changes.items() if k != "pass"}
 
     result = dict(changed=bool(all_changes), diff={"before": diff_before, "after": diff_after})
 
