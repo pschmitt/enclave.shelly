@@ -121,6 +121,10 @@ changed:
   description: Whether any WiFi configuration was changed.
   returned: always
   type: bool
+restart_required:
+  description: Whether the device must be rebooted for changes to take effect.
+  returned: always
+  type: bool
 '''
 
 from ansible.module_utils.basic import AnsibleModule
@@ -219,15 +223,20 @@ def run_module():
         diff_before["ap"] = {k: current_ap.get(k) for k in ap_changes if k != "pass"}
         diff_after["ap"] = {k: v for k, v in ap_changes.items() if k != "pass"}
 
-    result = dict(changed=bool(all_changes), diff={"before": diff_before, "after": diff_after})
+    result = dict(
+        changed=bool(all_changes),
+        restart_required=False,
+        diff={"before": diff_before, "after": diff_after},
+    )
 
     if not all_changes or module.check_mode:
         module.exit_json(**result)
 
-    connection.send_request(data={
+    response = connection.send_request(data={
         "method": "WiFi.SetConfig",
         "params": {"config": all_changes},
     })
+    result["restart_required"] = bool(response.get("restart_required", False))
     module.exit_json(**result)
 
 
