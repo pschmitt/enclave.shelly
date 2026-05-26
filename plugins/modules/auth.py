@@ -15,6 +15,13 @@ description:
     explicitly via O(update_password) because the device does not expose the
     current password or hash for comparison.
 options:
+    username:
+        description:
+          - Username to use for API authentication.
+          - Shelly gen 2+ devices only support C(admin).
+        required: false
+        type: str
+        default: admin
     enable:
         description:
           - Set to true to enable authentication, false to disable.
@@ -41,6 +48,7 @@ EXAMPLES = '''
 # Enable authentication, set the password to "abc"
 - name: Enable auth.
   enclave.shelly.auth:
+    username: admin
     enable: true
     password: abc
 
@@ -52,6 +60,7 @@ EXAMPLES = '''
 # Rotate the password while auth is already enabled.
 - name: Rotate auth password
   enclave.shelly.auth:
+    username: admin
     enable: true
     password: def
     update_password: true
@@ -79,6 +88,7 @@ import ansible_collections.enclave.shelly.plugins.module_utils.helpers as shelly
 
 def run_module():
     module_args = dict(
+        username=dict(type="str", required=False, default="admin"),
         enable=dict(type="bool", required=True),
         password=dict(type="str", required=False, no_log=True),
         update_password=dict(type="bool", required=False, default=False),
@@ -97,6 +107,7 @@ def run_module():
     )
 
     connection = Connection(module._socket_path)
+    desired_username = module.params["username"]
     desired_enable = module.params["enable"]
     update_password = module.params["update_password"] and desired_enable
 
@@ -104,10 +115,24 @@ def run_module():
         current = connection.send_request(data={"method": "Auth.GetConfig"})
         current_enable = current.get("enabled")
         result["password_updated"] = bool(current_enable and update_password)
-        result["changed"] = current_enable != desired_enable or result["password_updated"]
+        result["changed"] = (
+            current_enable != desired_enable
+            or result["password_updated"]
+            or bool(
+                desired_enable
+                and current_enable
+                and current.get("username") != desired_username
+            )
+        )
         result["diff"] = {
-            "before": {"enable": current_enable},
-            "after": {"enable": desired_enable},
+            "before": {
+                "enable": current_enable,
+                "username": current.get("username"),
+            },
+            "after": {
+                "enable": desired_enable,
+                "username": desired_username if desired_enable else None,
+            },
         }
         if not result["changed"] or module.check_mode:
             module.exit_json(**result)
@@ -115,7 +140,7 @@ def run_module():
         params = {"enabled": desired_enable}
         if desired_enable:
             params["unprotected"] = False
-            params["username"] = "admin"
+            params["username"] = desired_username
             params["password"] = module.params["password"]
 
         connection.send_request(
@@ -128,11 +153,18 @@ def run_module():
 
     device_info = connection.send_request(data={"method": "Shelly.GetDeviceInfo"})
     current_enable = device_info.get("auth_en")
+    if desired_enable and desired_username != "admin":
+        module.fail_json(
+            msg=(
+                "Shelly gen2+ devices only support the 'admin' API username. "
+                f"Requested username: {desired_username!r}"
+            )
+        )
     result["password_updated"] = bool(current_enable and update_password)
     result["changed"] = current_enable != desired_enable or result["password_updated"]
     result["diff"] = {
-        "before": {"enable": current_enable},
-        "after": {"enable": desired_enable},
+        "before": {"enable": current_enable, "username": "admin"},
+        "after": {"enable": desired_enable, "username": "admin" if desired_enable else None},
     }
 
     if not result["changed"] or module.check_mode:
@@ -148,7 +180,7 @@ def run_module():
         data={
             "method": "Shelly.SetAuth",
             "params": {
-                "user": "admin",
+                "user": desired_username,
                 "realm": realm,
                 "ha1": ha1,
             },

@@ -33,6 +33,7 @@ class HttpApi(HttpApiBase):
         super().__init__(connection)
 
         self._request_id = 0
+        self._shelly_username = "admin"
         self._shelly_password = None
         self._device_info = None
         self._device_generation = None
@@ -48,6 +49,7 @@ class HttpApi(HttpApiBase):
         The password parameter corresponds to the value of ansible_httpapi_password.
         We can override this function to store the password and use it later for API authentication.
         """
+        self._shelly_username = username or "admin"
         self._shelly_password = password
 
     def client_nonce(self):
@@ -57,7 +59,7 @@ class HttpApi(HttpApiBase):
         if password is None:
             password = self._shelly_password
 
-        return hash_string(f"admin:{realm}:{password}")
+        return hash_string(f"{self._shelly_username}:{realm}:{password}")
 
     def ha2(self):
         return hash_string("dummy_method:dummy_uri")
@@ -94,7 +96,7 @@ class HttpApi(HttpApiBase):
 
         return {
             "Authorization": to_text(
-                basic_auth_header("admin", self._shelly_password)
+                basic_auth_header(self._shelly_username, self._shelly_password)
             )
         }
 
@@ -634,7 +636,7 @@ class HttpApi(HttpApiBase):
             client_nonce = self.client_nonce()
             data["auth"] = {
                 "realm": realm,
-                "username": "admin",
+                "username": self._shelly_username,
                 "nonce": nonce,
                 "cnonce": client_nonce,
                 # nc = 1 because it's only asked over WS.

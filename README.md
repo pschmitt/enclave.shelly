@@ -69,8 +69,9 @@ shelly:
       ansible_httpapi_use_ssl: false
 
       # If you have enabled or plan to enable API authentication, then
-      # ansible_httpapi_password is the way by which you pass the password
-      # to the connection.
+      # ansible_user carries the API username (default: admin) and
+      # ansible_httpapi_password carries the password for the connection.
+      #ansible_user: admin
       #ansible_httpapi_password: some_secret_here.
 
       # Not setting these will require you to set gather_facts: false in the playbook.
@@ -95,6 +96,7 @@ Controlling the authentication parameters:
 # Enable authentication, set the password to "abc"
 - name: Enable auth.
   enclave.shelly.auth:
+    username: admin
     enable: true
     password: abc
 
@@ -106,10 +108,15 @@ Controlling the authentication parameters:
 # Rotate the password while auth is already enabled.
 - name: Rotate auth password
   enclave.shelly.auth:
+    username: admin
     enable: true
     password: def
     update_password: true
 ```
+
+Shelly gen 2+ devices only support the `admin` API username. The collection
+still exposes `username` so gen 1 devices can use a different login name, and
+the HTTPAPI plugin will reuse `ansible_user` for authenticated requests.
 
 Cloud and system defaults:
 ```yaml
