@@ -130,6 +130,8 @@ restart_required:
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.connection import Connection
 
+import ansible_collections.enclave.shelly.plugins.module_utils.helpers as shelly_utils
+
 _STA_KEYS = ("sta", "sta1")
 _STA_SPEC = {
     "ssid": {"type": "str", "required": True},
@@ -200,6 +202,7 @@ def run_module():
     )
 
     connection = Connection(module._socket_path)
+    is_gen1 = shelly_utils.get_device_generation(connection) == 1
     current = connection.send_request(data={"method": "WiFi.GetConfig"})
 
     all_changes = {}
@@ -215,7 +218,7 @@ def run_module():
             diff_before[sta_key] = {k: current_sta.get(k) for k in changes if k != "pass"}
             diff_after[sta_key] = {k: v for k, v in changes.items() if k != "pass"}
 
-    desired_ap = module.params["ap"]
+    desired_ap = None if is_gen1 else module.params["ap"]
     current_ap = current.get("ap") or {}
     ap_changes = _ap_changes(current_ap, desired_ap)
     if ap_changes:
