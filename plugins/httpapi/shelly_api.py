@@ -326,6 +326,7 @@ class HttpApi(HttpApiBase):
             settings = self._send_json_request("/settings", method="GET")
             device = {
                 "name": settings.get("name"),
+                "discoverable": settings.get("discoverable"),
                 "eco_mode": settings.get("eco_mode_enabled"),
                 "profile": None,
             }
@@ -351,6 +352,8 @@ class HttpApi(HttpApiBase):
             query = {}
             if "name" in device_cfg:
                 query["name"] = device_cfg["name"]
+            if "discoverable" in device_cfg:
+                query["discoverable"] = self._legacy_scalar(device_cfg["discoverable"])
             if "eco_mode" in device_cfg:
                 query["eco_mode_enabled"] = self._legacy_scalar(device_cfg["eco_mode"])
             leds = device_cfg.get("leds", {})
