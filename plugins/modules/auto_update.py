@@ -61,6 +61,8 @@ skipped_unsupported:
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.connection import Connection
 
+import ansible_collections.enclave.shelly.plugins.module_utils.helpers as shelly_utils
+
 AUTO_UPDATE_TIMESPEC = "0 0 0 * * 0,1,2,3,4,5,6"
 
 
@@ -122,6 +124,9 @@ def run_module():
     )
 
     connection = Connection(module._socket_path)
+    if shelly_utils.get_device_generation(connection) == 1:
+        module.exit_json(changed=False, restart_required=False, skipped_unsupported=True)
+
     if not has_auto_update_support(connection):
         module.exit_json(changed=False, restart_required=False, skipped_unsupported=True)
 
@@ -132,25 +137,18 @@ def run_module():
     desired_channel = module.params["channel"]
 
     diff_before = {"jobs": current_jobs}
-    diff_after = {
-        "jobs": (
-            [{"stage": desired_channel, "timespec": AUTO_UPDATE_TIMESPEC}]
-            if desired_enable
-            else []
-        )
-    }
-
     changed = False
     to_delete = []
     create_job = False
 
     if not desired_enable:
+        diff_after = {"jobs": []}
         to_delete = [job["id"] for job in current_jobs if job.get("id") is not None]
         changed = bool(to_delete)
     else:
         matching_jobs = [
             job for job in current_jobs
-            if job.get("stage") == desired_channel and job.get("timespec") == AUTO_UPDATE_TIMESPEC
+            if job.get("stage") == desired_channel
         ]
         keep_job_id = matching_jobs[0]["id"] if matching_jobs else None
         to_delete = [
@@ -159,6 +157,13 @@ def run_module():
         ]
         create_job = keep_job_id is None
         changed = bool(to_delete) or create_job
+        diff_after = {
+            "jobs": (
+                matching_jobs[:1]
+                if matching_jobs
+                else [{"stage": desired_channel, "timespec": AUTO_UPDATE_TIMESPEC}]
+            )
+        }
 
     result = dict(
         changed=changed,
