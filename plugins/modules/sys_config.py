@@ -72,6 +72,13 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.connection import Connection
 
 
+def float_differs(current, desired, tolerance=0.00001):
+    if current is None or desired is None:
+        return current != desired
+
+    return abs(float(current) - float(desired)) > tolerance
+
+
 def run_module():
     module = AnsibleModule(
         argument_spec={
@@ -97,11 +104,11 @@ def run_module():
         changes.setdefault("location", {})["tz"] = module.params["timezone"]
         diff_before["timezone"] = location.get("tz")
         diff_after["timezone"] = module.params["timezone"]
-    if module.params["latitude"] is not None and location.get("lat") != module.params["latitude"]:
+    if module.params["latitude"] is not None and float_differs(location.get("lat"), module.params["latitude"]):
         changes.setdefault("location", {})["lat"] = module.params["latitude"]
         diff_before["latitude"] = location.get("lat")
         diff_after["latitude"] = module.params["latitude"]
-    if module.params["longitude"] is not None and location.get("lon") != module.params["longitude"]:
+    if module.params["longitude"] is not None and float_differs(location.get("lon"), module.params["longitude"]):
         changes.setdefault("location", {})["lon"] = module.params["longitude"]
         diff_before["longitude"] = location.get("lon")
         diff_after["longitude"] = module.params["longitude"]

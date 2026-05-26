@@ -13,18 +13,32 @@ The collection talks to Shelly devices over HTTP:
 
 Current features include:
 * Basic device management (restarting remotely).
-* Managing the device API password.
+* Managing API authentication.
+* Managing cloud connectivity.
+* Managing device discoverability.
+* Managing Bluetooth Low Energy settings.
 * MQTT settings management.
+* System defaults such as SNTP, timezone, location, and RPC-over-UDP.
 * Switch input mode management.
+* 12/24-hour time display management.
 * WiFi settings mangement.
+* Outbound websocket management.
 * Script management.
 
-Shelly gen 1 compatibility currently covers facts, device reboot, MQTT settings,
-and relay input-mode management. Scripts remain a gen 2+ only feature; deleting a
-script on a gen 1 device is treated as a no-op.
+Shelly gen 1 compatibility currently covers facts, device reboot, authentication,
+cloud settings, discoverability, MQTT settings, system defaults, WiFi settings,
+and relay input-mode management. BLE, outbound websocket, and scripts remain
+gen 2+ only features; deleting a script on a gen 1 device is treated as a no-op.
 
 A lot of the modules accept inputs which transparently modify the settings exposed via API.
-As such, if the module's own documentation is lacking, please refer to [Shelly's own API documentation](https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/Introduction).
+As such, if the module's own documentation is lacking, please refer to Shelly's
+official API documentation:
+
+* Gen1 API reference: <https://shelly-api-docs.shelly.cloud/gen1>
+* Gen2+ component reference: <https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/Introduction>
+* Gen2+ Cloud component: <https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/Cloud>
+* Gen2+ System component: <https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/Sys>
+* Gen2+ Outbound Websocket component: <https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/Ws>
 
 ## Installing the Collection
 
@@ -47,8 +61,8 @@ shelly:
 
       # Set the host to the IP/DNS name of the shelly device.
       ansible_host: "10.0.0.123"
-      # Port must be 80.
-      ansible_port: "80"
+      # Shelly httpapi uses ansible_httpapi_port rather than ansible_port.
+      ansible_httpapi_port: 80
       # No SSL, this must be set to false.
       ansible_httpapi_use_ssl: false
 
@@ -86,6 +100,34 @@ Controlling the authentication parameters:
 - name: Disable auth.
   enclave.shelly.auth:
     enable: false
+```
+
+Cloud and system defaults:
+```yaml
+- name: Disable Shelly Cloud
+  enclave.shelly.cloud:
+    enable: false
+
+- name: Pin time and location defaults
+  enclave.shelly.sys_config:
+    sntp_server: time.cloudflare.com
+    timezone: Europe/Berlin
+    latitude: 52.0
+    longitude: 13.0
+    rpc_udp_listen_port:
+    rpc_udp_dst_addr:
+```
+
+Outbound websocket and BLE:
+```yaml
+- name: Disable outbound websocket
+  enclave.shelly.ws:
+    enable: false
+
+- name: Enable BLE but disable RPC over BLE
+  enclave.shelly.ble:
+    enable: true
+    rpc_enable: false
 ```
 
 MQTT connection setup:
