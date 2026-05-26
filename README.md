@@ -14,6 +14,8 @@ The collection talks to Shelly devices over HTTP:
 Current features include:
 * Basic device management (restarting remotely).
 * Managing API authentication.
+* Managing scheduled firmware auto-updates on supported devices.
+* Managing Matter enablement on supported devices.
 * Managing cloud connectivity.
 * Managing CoIoT settings on gen 1 devices.
 * Managing device discoverability.
@@ -149,6 +151,33 @@ Outbound websocket and BLE:
   enclave.shelly.ble:
     enable: true
     rpc_enable: false
+```
+
+Matter enablement:
+```yaml
+- name: Enable Matter when the device supports it
+  enclave.shelly.matter:
+    enable: true
+
+- name: Disable Matter when the device supports it
+  enclave.shelly.matter:
+    enable: false
+```
+
+Firmware auto-update:
+```yaml
+- name: Enable scheduled firmware auto-updates to stable releases
+  enclave.shelly.auto_update:
+    enable: true
+
+- name: Enable scheduled firmware auto-updates to beta releases
+  enclave.shelly.auto_update:
+    enable: true
+    channel: beta
+
+- name: Disable scheduled firmware auto-updates
+  enclave.shelly.auto_update:
+    enable: false
 ```
 
 MQTT connection setup:
