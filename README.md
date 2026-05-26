@@ -15,6 +15,7 @@ Current features include:
 * Basic device management (restarting remotely).
 * Managing API authentication.
 * Managing cloud connectivity.
+* Managing CoIoT settings on gen 1 devices.
 * Managing device discoverability.
 * Managing Bluetooth Low Energy settings.
 * MQTT settings management.
@@ -26,9 +27,10 @@ Current features include:
 * Script management.
 
 Shelly gen 1 compatibility currently covers facts, device reboot, authentication,
-cloud settings, discoverability, MQTT settings, system defaults, WiFi settings,
-and relay input-mode management. BLE, outbound websocket, and scripts remain
-gen 2+ only features; deleting a script on a gen 1 device is treated as a no-op.
+cloud settings, CoIoT settings, discoverability, MQTT settings, system defaults,
+WiFi settings, and relay input-mode management. BLE, outbound websocket, and
+scripts remain gen 2+ only features; deleting a script on a gen 1 device is
+treated as a no-op.
 
 A lot of the modules accept inputs which transparently modify the settings exposed via API.
 As such, if the module's own documentation is lacking, please refer to Shelly's
@@ -107,6 +109,11 @@ Cloud and system defaults:
 - name: Disable Shelly Cloud
   enclave.shelly.cloud:
     enable: false
+
+- name: Enable CoIoT multicast discovery on gen1
+  enclave.shelly.coiot:
+    enable: true
+    peer: mcast
 
 - name: Pin time and location defaults
   enclave.shelly.sys_config:

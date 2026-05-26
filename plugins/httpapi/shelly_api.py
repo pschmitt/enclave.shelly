@@ -398,6 +398,32 @@ class HttpApi(HttpApiBase):
                         )
             return {"restart_required": False}
 
+        if method == "CoIoT.GetConfig":
+            settings = self._send_json_request("/settings", method="GET")
+            coiot = settings.get("coiot", {})
+            peer = coiot.get("peer")
+            return {
+                "enable": coiot.get("enabled"),
+                "update_period": coiot.get("update_period"),
+                "peer": "mcast" if peer in (None, "") else peer,
+            }
+
+        if method == "CoIoT.SetConfig":
+            config = data.get("params", {}).get("config", {})
+            query = {}
+            if "enable" in config:
+                query["coiot_enable"] = self._legacy_scalar(config["enable"])
+            if "update_period" in config:
+                query["coiot_update_period"] = self._legacy_scalar(config["update_period"])
+            if "peer" in config:
+                query["coiot_peer"] = "mcast" if config["peer"] in (None, "", "mcast") else config["peer"]
+            if query:
+                self._send_json_request(
+                    f"/settings?{urlencode(query)}",
+                    method="GET",
+                )
+            return {"restart_required": False}
+
         if method == "Cloud.GetConfig":
             cloud = self._send_json_request("/settings/cloud", method="GET")
             return {
