@@ -373,6 +373,8 @@ class HttpApi(HttpApiBase):
                     "tz": settings.get("timezone"),
                     "lat": settings.get("lat"),
                     "lon": settings.get("lng"),
+                    "dst": settings.get("tz_dst"),
+                    "dst_auto": settings.get("tz_dst_auto"),
                 },
                 "sntp": {
                     "server": settings.get("sntp", {}).get("server"),
@@ -416,6 +418,10 @@ class HttpApi(HttpApiBase):
             if "lon" in location_cfg:
                 query["lng"] = self._legacy_scalar(location_cfg["lon"])
                 query["tzautodetect"] = self._legacy_scalar(False)
+            if "dst" in location_cfg:
+                query["tz_dst"] = self._legacy_scalar(location_cfg["dst"])
+            if "dst_auto" in location_cfg:
+                query["tz_dst_auto"] = self._legacy_scalar(location_cfg["dst_auto"])
             sntp_cfg = config.get("sntp", {})
             if "server" in sntp_cfg:
                 query["sntp_server"] = sntp_cfg["server"]

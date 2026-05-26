@@ -9,6 +9,8 @@ description:
   - Reads current system configuration via C(Sys.GetConfig).
   - Updates the SNTP server, timezone, location, and RPC-over-UDP settings
     when they differ from the requested values.
+  - Supports daylight saving mode on Shelly gen 1 devices and skips it on
+    newer devices that do not expose manual DST control.
 options:
     sntp_server:
         description:
@@ -20,6 +22,15 @@ options:
           - Desired timezone identifier.
         required: false
         type: str
+    daylight_saving:
+        description:
+          - Desired daylight saving mode.
+          - C(auto) uses the device's automatic DST behavior.
+          - C(on) forces DST on.
+          - C(off) forces DST off.
+        required: false
+        type: str
+        choices: [on, off, auto]
     latitude:
         description:
           - Desired latitude in decimal degrees.
@@ -51,6 +62,7 @@ EXAMPLES = '''
   enclave.shelly.sys_config:
     sntp_server: time.cloudflare.com
     timezone: Europe/Berlin
+    daylight_saving: auto
     latitude: 52.0
     longitude: 13.0
     rpc_udp_listen_port:
@@ -66,10 +78,16 @@ restart_required:
   description: Whether the device must be rebooted for the config change to apply.
   returned: always
   type: bool
+skipped_unsupported:
+  description: True when the requested DST setting is unsupported on the device.
+  returned: always
+  type: bool
 '''
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.connection import Connection
+
+import ansible_collections.enclave.shelly.plugins.module_utils.helpers as shelly_utils
 
 
 def float_differs(current, desired, tolerance=0.00001):
@@ -84,6 +102,12 @@ def run_module():
         argument_spec={
             "sntp_server": {"type": "str", "required": False, "default": None},
             "timezone": {"type": "str", "required": False, "default": None},
+            "daylight_saving": {
+                "type": "str",
+                "required": False,
+                "default": None,
+                "choices": ["on", "off", "auto"],
+            },
             "latitude": {"type": "float", "required": False, "default": None},
             "longitude": {"type": "float", "required": False, "default": None},
             "rpc_udp_listen_port": {"type": "int", "required": False, "default": None},
@@ -94,10 +118,12 @@ def run_module():
 
     connection = Connection(module._socket_path)
     current = connection.send_request(data={"method": "Sys.GetConfig"})
+    is_gen1 = shelly_utils.get_device_generation(connection) == 1
 
     changes = {}
     diff_before = {}
     diff_after = {}
+    skipped_unsupported = False
 
     location = current.get("location", {})
     if module.params["timezone"] is not None and location.get("tz") != module.params["timezone"]:
@@ -119,6 +145,25 @@ def run_module():
         diff_before["sntp_server"] = sntp.get("server")
         diff_after["sntp_server"] = module.params["sntp_server"]
 
+    desired_daylight_saving = module.params["daylight_saving"]
+    if desired_daylight_saving is not None:
+        if is_gen1:
+            current_daylight_saving = "auto"
+            if not location.get("dst_auto", False):
+                current_daylight_saving = "on" if location.get("dst", False) else "off"
+
+            if current_daylight_saving != desired_daylight_saving:
+                changes.setdefault("location", {})
+                if desired_daylight_saving == "auto":
+                    changes["location"]["dst_auto"] = True
+                else:
+                    changes["location"]["dst_auto"] = False
+                    changes["location"]["dst"] = desired_daylight_saving == "on"
+                diff_before["daylight_saving"] = current_daylight_saving
+                diff_after["daylight_saving"] = desired_daylight_saving
+        else:
+            skipped_unsupported = True
+
     rpc_udp = current.get("rpc_udp", {})
     desired_listen_port = module.params["rpc_udp_listen_port"]
     desired_dst_addr = module.params["rpc_udp_dst_addr"]
@@ -134,6 +179,7 @@ def run_module():
     result = dict(
         changed=bool(changes),
         restart_required=False,
+        skipped_unsupported=skipped_unsupported,
         diff={"before": diff_before, "after": diff_after},
     )
 
