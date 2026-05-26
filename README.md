@@ -14,6 +14,7 @@ The collection talks to Shelly devices over HTTP:
 Current features include:
 * Basic device management (restarting remotely).
 * Managing API authentication.
+* Managing HTTP CORS on supported devices.
 * Managing scheduled firmware auto-updates on supported devices.
 * Managing Matter enablement on supported devices.
 * Managing cloud connectivity.
@@ -178,6 +179,13 @@ Firmware auto-update:
 - name: Disable scheduled firmware auto-updates
   enclave.shelly.auto_update:
     enable: false
+```
+
+HTTP CORS:
+```yaml
+- name: Disable cross-origin requests when the device supports it
+  enclave.shelly.cors:
+    enabled: false
 ```
 
 MQTT connection setup:

@@ -386,6 +386,9 @@ class HttpApi(HttpApiBase):
                     "dst_addr": None,
                     "listen_port": None,
                 },
+                "web": {
+                    "allow_cross_origin": settings.get("allow_cross_origin"),
+                },
             }
 
         if method == "Sys.SetConfig":
@@ -416,6 +419,9 @@ class HttpApi(HttpApiBase):
             sntp_cfg = config.get("sntp", {})
             if "server" in sntp_cfg:
                 query["sntp_server"] = sntp_cfg["server"]
+            web_cfg = config.get("web", {})
+            if "allow_cross_origin" in web_cfg:
+                query["allow_cross_origin"] = self._legacy_scalar(web_cfg["allow_cross_origin"])
             if query:
                 self._send_json_request(f"/settings?{urlencode(query)}", method="GET")
             consumption_types = config.get("ui_data", {}).get("consumption_types")
