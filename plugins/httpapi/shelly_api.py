@@ -21,6 +21,7 @@ from ansible.plugins.httpapi import HttpApiBase
 from ansible.errors import AnsibleConnectionFailure
 from ansible.module_utils.basic import to_text
 from ansible.module_utils.common.parameters import remove_values
+from ansible.module_utils.urls import basic_auth_header
 
 from http.client import HTTPResponse
 
@@ -68,16 +69,34 @@ class HttpApi(HttpApiBase):
             return False
 
     def process_authenticate_header(self, header):
-        header = header.split(", ")
         header_dict = {}
-        for header_subset in header:
-            header_subset = header_subset.split("=")
-            key = header_subset[0]
-            value = header_subset[1]
-            value = value[1:-1]
+        scheme, _, remainder = header.partition(" ")
+        header_dict["scheme"] = scheme
+
+        if scheme.lower() == "basic":
+            return header_dict
+
+        for header_subset in remainder.split(","):
+            key, _, value = header_subset.strip().partition("=")
+            if not key:
+                continue
+
+            if value.startswith('"') and value.endswith('"'):
+                value = value[1:-1]
+
             header_dict[key] = value
 
         return header_dict
+
+    def basic_auth_headers(self):
+        if not self.auth_available():
+            return {}
+
+        return {
+            "Authorization": to_text(
+                basic_auth_header("admin", self._shelly_password)
+            )
+        }
 
     @property
     def device_info(self):
@@ -106,7 +125,11 @@ class HttpApi(HttpApiBase):
             )
         except Exception as exc:
             exc_text = to_text(exc)
-            if "Not Found" not in exc_text and "HTTP 404" not in exc_text:
+            if (
+                "Not Found" not in exc_text
+                and "HTTP 404" not in exc_text
+                and "HTTP basic auth" not in exc_text
+            ):
                 raise
 
             device_info = self._send_json_request("/shelly", method="GET")
@@ -117,7 +140,12 @@ class HttpApi(HttpApiBase):
         return device_info
 
     def _send_json_request(self, path, data="", method="GET"):
-        response, response_data = self.connection.send(path, data, method=method)
+        response, response_data = self.connection.send(
+            path,
+            data,
+            method=method,
+            headers=self.basic_auth_headers(),
+        )
         value = to_text(response_data.getvalue())
 
         if response.getcode() < 200 or response.getcode() >= 300:
@@ -597,6 +625,10 @@ class HttpApi(HttpApiBase):
                 raise ConnectionError("Shelly API requires auth, but did not populate WWW-Authenticate header.")
             
             headers = self.process_authenticate_header(authenticate_request)
+            if headers.get("scheme", "").lower() == "basic":
+                raise ConnectionError(
+                    "Shelly API requires HTTP basic auth for this endpoint."
+                )
             nonce = headers["nonce"]
             realm = headers["realm"]
             client_nonce = self.client_nonce()

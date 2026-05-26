@@ -102,6 +102,13 @@ Controlling the authentication parameters:
 - name: Disable auth.
   enclave.shelly.auth:
     enable: false
+
+# Rotate the password while auth is already enabled.
+- name: Rotate auth password
+  enclave.shelly.auth:
+    enable: true
+    password: def
+    update_password: true
 ```
 
 Cloud and system defaults:

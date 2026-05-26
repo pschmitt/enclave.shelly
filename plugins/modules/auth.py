@@ -11,6 +11,9 @@ description:
     C(/settings/login).
   - If this module is used to enable authentication, then all subsequent module
     calls need to provide the same password via C(ansible_httpapi_password).
+  - Password rotations while authentication is already enabled must be requested
+    explicitly via O(update_password) because the device does not expose the
+    current password or hash for comparison.
 options:
     enable:
         description:
@@ -23,6 +26,13 @@ options:
           - Required if enable is set to true.
         required: false
         type: str
+    update_password:
+        description:
+          - Force updating the password even when authentication is already enabled.
+          - Use this when rotating the API password.
+        required: false
+        type: bool
+        default: false
 author:
     - RustedSkull (@skull132)
 '''
@@ -38,15 +48,26 @@ EXAMPLES = '''
 - name: Disable auth.
   enclave.shelly.auth:
     enable: false
+
+# Rotate the password while auth is already enabled.
+- name: Rotate auth password
+  enclave.shelly.auth:
+    enable: true
+    password: def
+    update_password: true
 '''
 
 RETURN = '''
 changed:
-  description: Whether the auth setting was changed.
+  description: Whether the auth setting changed or the password was rotated.
   returned: always
   type: bool
 restart_required:
   description: Whether the device must be rebooted for the config change to apply.
+  returned: always
+  type: bool
+password_updated:
+  description: True when the password was rotated while auth stayed enabled.
   returned: always
   type: bool
 '''
@@ -59,27 +80,31 @@ import ansible_collections.enclave.shelly.plugins.module_utils.helpers as shelly
 def run_module():
     module_args = dict(
         enable=dict(type="bool", required=True),
-        password=dict(type="str", required=False, no_log=True)
+        password=dict(type="str", required=False, no_log=True),
+        update_password=dict(type="bool", required=False, default=False),
     )
 
     module = AnsibleModule(
         argument_spec=module_args,
         supports_check_mode=True,
-        required_if=[("enable", True, ("password"), False)]
+        required_if=[("enable", True, ("password",), False)]
     )
 
     result = dict(
         changed=False,
         restart_required=False,
+        password_updated=False,
     )
 
     connection = Connection(module._socket_path)
     desired_enable = module.params["enable"]
+    update_password = module.params["update_password"] and desired_enable
 
     if shelly_utils.get_device_generation(connection) == 1:
         current = connection.send_request(data={"method": "Auth.GetConfig"})
         current_enable = current.get("enabled")
-        result["changed"] = current_enable != desired_enable
+        result["password_updated"] = bool(current_enable and update_password)
+        result["changed"] = current_enable != desired_enable or result["password_updated"]
         result["diff"] = {
             "before": {"enable": current_enable},
             "after": {"enable": desired_enable},
@@ -103,7 +128,8 @@ def run_module():
 
     device_info = connection.send_request(data={"method": "Shelly.GetDeviceInfo"})
     current_enable = device_info.get("auth_en")
-    result["changed"] = current_enable != desired_enable
+    result["password_updated"] = bool(current_enable and update_password)
+    result["changed"] = current_enable != desired_enable or result["password_updated"]
     result["diff"] = {
         "before": {"enable": current_enable},
         "after": {"enable": desired_enable},
