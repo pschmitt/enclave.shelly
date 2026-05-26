@@ -339,10 +339,22 @@ class HttpApi(HttpApiBase):
                 device["leds"] = leds
             return {
                 "device": device,
+                "location": {
+                    "tz": settings.get("timezone"),
+                    "lat": settings.get("lat"),
+                    "lon": settings.get("lng"),
+                },
+                "sntp": {
+                    "server": settings.get("sntp", {}).get("server"),
+                },
                 "ui_data": {
                     "consumption_types": [
                         r.get("appliance_type") for r in settings.get("relays", [])
                     ],
+                },
+                "rpc_udp": {
+                    "dst_addr": None,
+                    "listen_port": None,
                 },
             }
 
@@ -361,6 +373,19 @@ class HttpApi(HttpApiBase):
                 query["led_status_disable"] = self._legacy_scalar(not leds["status"])
             if "power" in leds:
                 query["led_power_disable"] = self._legacy_scalar(not leds["power"])
+            location_cfg = config.get("location", {})
+            if "tz" in location_cfg:
+                query["timezone"] = location_cfg["tz"]
+                query["tzautodetect"] = self._legacy_scalar(False)
+            if "lat" in location_cfg:
+                query["lat"] = self._legacy_scalar(location_cfg["lat"])
+                query["tzautodetect"] = self._legacy_scalar(False)
+            if "lon" in location_cfg:
+                query["lng"] = self._legacy_scalar(location_cfg["lon"])
+                query["tzautodetect"] = self._legacy_scalar(False)
+            sntp_cfg = config.get("sntp", {})
+            if "server" in sntp_cfg:
+                query["sntp_server"] = sntp_cfg["server"]
             if query:
                 self._send_json_request(f"/settings?{urlencode(query)}", method="GET")
             consumption_types = config.get("ui_data", {}).get("consumption_types")
@@ -371,6 +396,60 @@ class HttpApi(HttpApiBase):
                             f"/settings/relay/{i}?{urlencode({'appliance_type': ct})}",
                             method="GET",
                         )
+            return {"restart_required": False}
+
+        if method == "Cloud.GetConfig":
+            cloud = self._send_json_request("/settings/cloud", method="GET")
+            return {
+                "enable": cloud.get("enabled"),
+            }
+
+        if method == "Cloud.SetConfig":
+            config = data.get("params", {}).get("config", {})
+            query = {}
+            if "enable" in config:
+                query["enabled"] = self._legacy_scalar(config["enable"])
+            if query:
+                self._send_json_request(
+                    f"/settings/cloud?{urlencode(query)}",
+                    method="GET",
+                )
+            return {"restart_required": False}
+
+        if method == "Ws.GetConfig":
+            raise ConnectionError(
+                "Shelly gen1 devices do not support outbound websocket configuration."
+            )
+
+        if method == "Ws.SetConfig":
+            raise ConnectionError(
+                "Shelly gen1 devices do not support outbound websocket configuration."
+            )
+
+        if method == "Auth.GetConfig":
+            login = self._send_json_request("/settings/login", method="GET")
+            return {
+                "enabled": login.get("enabled"),
+                "unprotected": login.get("unprotected"),
+                "username": login.get("username"),
+            }
+
+        if method == "Auth.SetConfig":
+            config = data.get("params", {}).get("config", {})
+            query = {}
+            if "enabled" in config:
+                query["enabled"] = self._legacy_scalar(config["enabled"])
+            if "unprotected" in config:
+                query["unprotected"] = self._legacy_scalar(config["unprotected"])
+            if "username" in config:
+                query["username"] = config["username"]
+            if "password" in config:
+                query["password"] = config["password"]
+            if query:
+                self._send_json_request(
+                    f"/settings/login?{urlencode(query)}",
+                    method="GET",
+                )
             return {"restart_required": False}
 
         if method == "WiFi.GetConfig":
