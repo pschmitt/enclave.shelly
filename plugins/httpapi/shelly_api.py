@@ -392,21 +392,25 @@ class HttpApi(HttpApiBase):
             sta = config.get("sta", {})
             if sta:
                 query = {}
+                if "enable" in sta:
+                    query["enabled"] = self._legacy_scalar(sta["enable"])
                 if "ssid" in sta:
-                    query["wifi_ssid"] = sta["ssid"]
+                    query["ssid"] = sta["ssid"]
                 if "pass" in sta:
-                    query["wifi_pass"] = sta["pass"]
+                    query["key"] = sta["pass"]
                 if query:
-                    self._send_json_request(f"/settings?{urlencode(query)}", method="GET")
+                    self._send_json_request(f"/settings/sta?{urlencode(query)}", method="GET")
             sta1 = config.get("sta1", {})
             if sta1:
                 query1 = {}
+                if "enable" in sta1:
+                    query1["enabled"] = self._legacy_scalar(sta1["enable"])
                 if "ssid" in sta1:
-                    query1["wifi_ssid1"] = sta1["ssid"]
+                    query1["ssid"] = sta1["ssid"]
                 if "pass" in sta1:
-                    query1["wifi_pass1"] = sta1["pass"]
+                    query1["key"] = sta1["pass"]
                 if query1:
-                    self._send_json_request(f"/settings?{urlencode(query1)}", method="GET")
+                    self._send_json_request(f"/settings/sta1?{urlencode(query1)}", method="GET")
             return {"restart_required": False}
 
         if method == "Cover.GetConfig":
