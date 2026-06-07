@@ -24,6 +24,7 @@ Current features include:
 * MQTT settings management.
 * System defaults such as SNTP, timezone, location, and RPC-over-UDP.
 * Switch input mode management.
+* Overload protection limits (power/current/voltage) management.
 * 12/24-hour time display management.
 * WiFi settings mangement.
 * Outbound websocket management.
@@ -31,9 +32,10 @@ Current features include:
 
 Shelly gen 1 compatibility currently covers facts, device reboot, authentication,
 cloud settings, CoIoT settings, discoverability, MQTT settings, system defaults,
-WiFi settings, and relay input-mode management. BLE, outbound websocket, and
-scripts remain gen 2+ only features; deleting a script on a gen 1 device is
-treated as a no-op.
+WiFi settings, and relay input-mode management. Overload protection on gen 1 is
+limited to the Watts-based power limit (gen 2+ additionally supports current and
+voltage limits). BLE, outbound websocket, and scripts remain gen 2+ only
+features; deleting a script on a gen 1 device is treated as a no-op.
 
 A lot of the modules accept inputs which transparently modify the settings exposed via API.
 As such, if the module's own documentation is lacking, please refer to Shelly's
@@ -233,6 +235,22 @@ Switch input mode management:
   enclave.shelly.switch:
     id: 0
     in_mode: follow
+```
+
+Overload protection limits (use `max` for the device's rated maximum, `0` to
+disable; current/voltage are gen 2+ only):
+```yaml
+- name: Cap channel 0 at the rated maximum power
+  enclave.shelly.protection:
+    id: 0
+    power_limit: max
+
+- name: Set explicit gen 2+ limits
+  enclave.shelly.protection:
+    id: 0
+    power_limit: 3000
+    current_limit: 12
+    voltage_limit: 260
 ```
 
 Script management:

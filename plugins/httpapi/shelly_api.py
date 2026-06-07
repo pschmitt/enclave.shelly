@@ -215,6 +215,10 @@ class HttpApi(HttpApiBase):
                 "switch": "match_input",
             }.get(default_state, default_state)
 
+        # Expose the gen1 overpower threshold under the gen2 field name
+        # (0 means disabled). Gen1 has no current/voltage protection.
+        result["power_limit"] = relay_settings.get("max_power")
+
         return result
 
     def _legacy_scalar(self, value):
@@ -309,6 +313,15 @@ class HttpApi(HttpApiBase):
 
             if "auto_off" in config:
                 query["auto_off"] = config["auto_off_delay"] if config["auto_off"] else 0
+
+            if "current_limit" in config or "voltage_limit" in config:
+                raise ConnectionError(
+                    "Shelly gen1 devices support only power (max_power) protection."
+                )
+
+            if "power_limit" in config:
+                power_limit = config["power_limit"]
+                query["max_power"] = 0 if power_limit is None else power_limit
 
             if query:
                 self._send_json_request(
