@@ -29,7 +29,7 @@ MODEL_LIMITS = {
     "Plus1PM": {"power": 4480, "current": 16, "voltage": 280},
     "Pro1PM": {"power": 4480, "current": 16, "voltage": 280},
     "Pro4PM": {"power": 4480, "current": 16, "voltage": 280},
-    "S2PMG4": {"power": 4480, "current": 16, "voltage": 280},  # 2PM Gen4
+    "S2PMG4": {"power": 2800, "current": 10, "voltage": 280},  # 2PM Gen4 (per channel, fw-enforced)
     "PlusPlugS": {"power": 2500, "current": 12, "voltage": 280},
     "Mini1PMG3": {"power": 2240, "current": 8, "voltage": 280},  # 1PM Mini Gen3
     "Mini1PMG4": {"power": 2240, "current": 8, "voltage": 280},  # 1PM Mini Gen4
