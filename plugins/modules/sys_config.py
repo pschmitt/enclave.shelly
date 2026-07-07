@@ -7,10 +7,13 @@ short_description: Configure Shelly system settings on gen 1+ devices.
 version_added: "0.28.0"
 description:
   - Reads current system configuration via C(Sys.GetConfig).
-  - Updates the SNTP server, timezone, location, and RPC-over-UDP settings
-    when they differ from the requested values.
+  - Updates the SNTP server, timezone, location, RPC-over-UDP, and remote
+    syslog settings when they differ from the requested values.
   - Supports daylight saving mode on Shelly gen 1 devices and skips it on
     newer devices that do not expose manual DST control.
+  - Remote syslog is delivered as a raw UDP debug log stream
+    (C(debug.udp.addr)) and is only supported on Shelly gen 2+ devices; it is
+    silently skipped on gen 1 devices.
 options:
     sntp_server:
         description:
@@ -53,6 +56,14 @@ options:
           - Set to null to disable outbound RPC-over-UDP notifications.
         required: false
         type: str
+    syslog_destination:
+        description:
+          - Remote syslog destination in C(host:port) form, e.g. C(10.5.0.14:514).
+          - Streams the device debug log as raw UDP to this destination.
+          - Set to null to disable remote syslog.
+          - Only supported on Shelly gen 2+ devices; silently skipped on gen 1.
+        required: false
+        type: str
 author:
     - pschmitt
 '''
@@ -67,6 +78,7 @@ EXAMPLES = '''
     longitude: 13.0
     rpc_udp_listen_port:
     rpc_udp_dst_addr:
+    syslog_destination: 10.5.0.14:514
 '''
 
 RETURN = '''
@@ -79,7 +91,9 @@ restart_required:
   returned: always
   type: bool
 skipped_unsupported:
-  description: True when the requested DST setting is unsupported on the device.
+  description: >-
+    True when the requested DST setting or remote syslog destination is
+    unsupported on the device (e.g. gen 1 devices).
   returned: always
   type: bool
 '''
@@ -112,6 +126,7 @@ def run_module():
             "longitude": {"type": "float", "required": False, "default": None},
             "rpc_udp_listen_port": {"type": "int", "required": False, "default": None},
             "rpc_udp_dst_addr": {"type": "str", "required": False, "default": None},
+            "syslog_destination": {"type": "str", "required": False, "default": None},
         },
         supports_check_mode=True,
     )
@@ -175,6 +190,17 @@ def run_module():
         changes.setdefault("rpc_udp", {})["dst_addr"] = desired_dst_addr
         diff_before["rpc_udp_dst_addr"] = rpc_udp.get("dst_addr")
         diff_after["rpc_udp_dst_addr"] = desired_dst_addr
+
+    desired_syslog_destination = module.params["syslog_destination"]
+    if is_gen1:
+        if desired_syslog_destination is not None:
+            skipped_unsupported = True
+    else:
+        current_syslog_destination = current.get("debug", {}).get("udp", {}).get("addr")
+        if current_syslog_destination != desired_syslog_destination:
+            changes.setdefault("debug", {}).setdefault("udp", {})["addr"] = desired_syslog_destination
+            diff_before["syslog_destination"] = current_syslog_destination
+            diff_after["syslog_destination"] = desired_syslog_destination
 
     result = dict(
         changed=bool(changes),
