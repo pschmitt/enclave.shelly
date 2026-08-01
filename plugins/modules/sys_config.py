@@ -9,6 +9,8 @@ description:
   - Reads current system configuration via C(Sys.GetConfig).
   - Updates the SNTP server, timezone, location, RPC-over-UDP, and remote
     syslog settings when they differ from the requested values.
+  - Updates TLS certificate date/time validation on devices with firmware
+    2.0.0 or newer.
   - Supports daylight saving mode on Shelly gen 1 devices and skips it on
     newer devices that do not expose manual DST control.
   - Remote syslog is delivered as a raw UDP debug log stream
@@ -64,6 +66,13 @@ options:
           - Only supported on Shelly gen 2+ devices; silently skipped on gen 1.
         required: false
         type: str
+    tls_check_cert_validity_time:
+        description:
+          - Whether outbound TLS certificate date/time validation is enforced.
+          - This setting is available on Shelly firmware 2.0.0 and newer.
+          - It can only be set to C(false) when enhanced security is disabled.
+        required: false
+        type: bool
 author:
     - pschmitt
 '''
@@ -79,6 +88,7 @@ EXAMPLES = '''
     rpc_udp_listen_port:
     rpc_udp_dst_addr:
     syslog_destination: 10.5.0.14:514
+    tls_check_cert_validity_time: true
 '''
 
 RETURN = '''
@@ -92,8 +102,8 @@ restart_required:
   type: bool
 skipped_unsupported:
   description: >-
-    True when the requested DST setting or remote syslog destination is
-    unsupported on the device (e.g. gen 1 devices).
+    True when one of the requested DST, remote syslog, or TLS settings is
+    unsupported on the device.
   returned: always
   type: bool
 '''
@@ -127,6 +137,11 @@ def run_module():
             "rpc_udp_listen_port": {"type": "int", "required": False, "default": None},
             "rpc_udp_dst_addr": {"type": "str", "required": False, "default": None},
             "syslog_destination": {"type": "str", "required": False, "default": None},
+            "tls_check_cert_validity_time": {
+                "type": "bool",
+                "required": False,
+                "default": None,
+            },
         },
         supports_check_mode=True,
     )
@@ -141,6 +156,7 @@ def run_module():
     skipped_unsupported = False
 
     location = current.get("location", {})
+    device = current.get("device", {})
     if module.params["timezone"] is not None and location.get("tz") != module.params["timezone"]:
         changes.setdefault("location", {})["tz"] = module.params["timezone"]
         diff_before["timezone"] = location.get("tz")
@@ -201,6 +217,28 @@ def run_module():
             changes.setdefault("debug", {}).setdefault("udp", {})["addr"] = desired_syslog_destination
             diff_before["syslog_destination"] = current_syslog_destination
             diff_after["syslog_destination"] = desired_syslog_destination
+
+    desired_tls_check_cert_validity_time = module.params["tls_check_cert_validity_time"]
+    if desired_tls_check_cert_validity_time is not None:
+        current_tls_check_cert_validity_time = device.get("tls_check_cert_validity_time")
+        if current_tls_check_cert_validity_time is None:
+            skipped_unsupported = True
+        elif (
+            desired_tls_check_cert_validity_time is False
+            and device.get("enhanced_security") is True
+        ):
+            module.fail_json(
+                msg=(
+                    "tls_check_cert_validity_time cannot be disabled while "
+                    "enhanced security is enabled"
+                )
+            )
+        elif current_tls_check_cert_validity_time != desired_tls_check_cert_validity_time:
+            changes.setdefault("device", {})["tls_check_cert_validity_time"] = (
+                desired_tls_check_cert_validity_time
+            )
+            diff_before["tls_check_cert_validity_time"] = current_tls_check_cert_validity_time
+            diff_after["tls_check_cert_validity_time"] = desired_tls_check_cert_validity_time
 
     result = dict(
         changed=bool(changes),

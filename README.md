@@ -23,6 +23,7 @@ Current features include:
 * Managing Bluetooth Low Energy settings.
 * MQTT settings management.
 * System defaults such as SNTP, timezone, location, and RPC-over-UDP.
+* TLS certificate date/time validation on Shelly firmware 2.0.0+.
 * Switch input mode management.
 * Overload protection limits (power/current/voltage) management.
 * 12/24-hour time display management.
@@ -142,6 +143,7 @@ Cloud and system defaults:
     longitude: 13.0
     rpc_udp_listen_port:
     rpc_udp_dst_addr:
+    tls_check_cert_validity_time: true
 ```
 
 Outbound websocket and BLE:
